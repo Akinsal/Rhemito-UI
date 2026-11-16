@@ -48,3 +48,12 @@
 - `REF-MITO-v1.1` (08/10/2026) `D5` (*"Credit is issued only when the qualifying transfer reaches COMPLETED"*) → Superseded for referee credit (`REGISTERED`); retained for referrer credit (`COMPLETED`).
 - `REF-MITO-v1.1` (08/10/2026) `D8` / `BR-34` (*"Both parties must have passed KYC before their credit is issued"* / `Awaiting referee KYC`) → Superseded for referee credit; retained for referrer credit (`Awaiting referrer KYC`).
 - `REFERRAL-13` (`PromoCode/server/tests/contracts/referral.contract.test.js`) → Updated 2026-11-16 to assert immediate referee credit on sign-up with `kyc_status: 'PENDING'` and referrer hold on `Awaiting referrer KYC`.
+
+---
+
+### `DEC-2026-11-17-HIDE-WAYS-TO-EARN` — Hide `Ways to earn` Section on `Reward$` Overview
+- **Date Approved:** 17 November 2026 (`2026-11-17`)
+- **Decision Owner / Approver:** Mohammad Mumtaz (Product Owner)
+- **Status:** `Human-Approved` (`Option 1 — Hide completely`)
+- **Affected Files (`Rhemito-UI`):** `client/src/pages/BonusAndDiscounts.tsx`, `docs/requirements/BONUS_MODULE_SPEC_RHEMITO.md` (plus `REF-23` / `bonus.spec.js` test sync after live URL confirmation)
+- **Summary & Superseded Baseline:** `<WaysToEarn />` (`data-testid="ways-to-earn"`) is no longer rendered on `/bonus-discounts` (`Reward$` → `Overview`), superseding `BONUS_MODULE_SPEC_RHEMITO.md` §7.4 while keeping `WaysToEarn.tsx` and all backend bonus scheme awarding intact.

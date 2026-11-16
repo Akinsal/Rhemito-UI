@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useRewards } from "@/hooks/use-rewards";
-import { BonusBlockedNotice, BonusBreakdown, BONUS_COPY, SourceChip, WaysToEarn, describeCredit, isCreditSource, sourceGroupLabel, useBonusSummary, type CreditSource } from "@/features/bonus";
+import { BonusBlockedNotice, BonusBreakdown, BONUS_COPY, SourceChip, describeCredit, isCreditSource, sourceGroupLabel, useBonusSummary, type CreditSource } from "@/features/bonus";
 import { usePromoSavings, PROMO_COPY } from "@/features/promo";
 import { cn } from "@/lib/utils";
 import {
@@ -186,7 +186,6 @@ export default function BonusAndDiscounts() {
   const bySourceRows = source === "ALL" || filter === "promo" ? history : history.filter((h) => h.credit_source === source);
   const filtered = filter === "all" ? bySourceRows : bySourceRows.filter((h) => h.kind === filter);
   const showSourceFilter = (balance.by_source?.length ?? 0) > 1 || source !== "ALL";
-  const waysToEarnOffers = (bonusSummary.data?.offers ?? []).filter((o) => !o.currency || o.currency.toUpperCase() === currency);
 
   const buildUrl = (nextTab: Tab, nextPicked: string | null = pickedCurrency, nextSource?: CreditSource) => {
     const params = new URLSearchParams();
@@ -390,8 +389,6 @@ export default function BonusAndDiscounts() {
                     </ul>
                   )}
                 </Card>
-
-                <WaysToEarn offers={waysToEarnOffers} blocked={data?.wallet.bonus_blocked || bonusSummary.data?.blocked} />
               </TabsContent>
 
               <TabsContent value="history" className="mt-6 space-y-4">

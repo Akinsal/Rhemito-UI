@@ -140,13 +140,12 @@ test.describe('Bonus & Discounts', () => {
         await expect(page.getByTestId('bonus-outstanding')).toContainText('£3.00 of future bonus will go towards bonus that was removed');
     });
 
-    test('Ways to earn lists live offers, and is hidden when the service is down or the customer is blocked', async ({ page }) => {
+    test('Ways to earn is hidden on Overview even when live offers exist, and blocked notice still renders when blocked', async ({ page }) => {
         const offers = [{ id: 1, name: 'Send 3, get £10', type: 'LOYALTY', currency: 'GBP', summary: 'Complete 3 transfers within 30 days and get £10.00 bonus credit.', end_date: '2027-01-31', end_date_display: '31/01/2027' }];
         await mock(page, { offers });
         await page.goto('/bonus-discounts');
-        const ways = page.getByTestId('ways-to-earn');
-        await expect(ways).toContainText('Complete 3 transfers within 30 days and get £10.00 bonus credit.');
-        await expect(ways).toContainText('Ends 31/01/2027');
+        await expect(page.getByTestId('bonus-totals')).toBeVisible();
+        await expect(page.getByTestId('ways-to-earn')).toHaveCount(0);
 
         await page.unroute('**/api/bonus/summary**');
         await mock(page, { offers, blocked: true });

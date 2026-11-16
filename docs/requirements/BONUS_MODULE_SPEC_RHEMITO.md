@@ -195,8 +195,10 @@ Keep the current page and approved design; bonus module supplies these parts:
 - **History** chips `All`, `Earned`, `Used`, `Expired` (+ `Promo codes` provided by the promo module), plus a **Source** select (`All sources`, `Referrals`, `Bonus offers`, `From Rhemito`). URL query `?source=REFERRAL|SCHEME|MANUAL` preselects it (the referral module links here with `?source=REFERRAL`). Rows: source tag chip, description, date, status pill (Unused teal, Partly used amber, Used slate, Expired slate, Reversed red, Returned teal), signed amount.
 - Empty: `No bonuses yet. See ways to earn below.` Error: `We couldn't load your bonus credit. Please try again.` + `Try again`.
 
-### 7.4 Ways to earn (new; UX approval required)
-Section on Bonus & Discounts under Overview, from `offers`: one card per live scheme in the customer's currency — title (scheme name), sentence (`summary` from Mito, e.g. `Complete 3 transfers within 30 days and get £10.00 bonus credit.`), `Ends DD/MM/YYYY` when set. Hidden when there are no offers or when blocked.
+### 7.4 Ways to earn (superseded 2026-11-17 — hidden on `Reward$` Overview)
+> **Updated 2026-11-17 (`DEC-2026-11-17-HIDE-WAYS-TO-EARN`, approved by Mohammad):** `<WaysToEarn />` is hidden completely (not rendered) on the `Reward$` (`/bonus-discounts`) `Overview` tab (`Option 1`). `WaysToEarn.tsx` remains preserved in `client/src/features/bonus/components/WaysToEarn.tsx`, and backend bonus scheme evaluation/awarding continues unchanged.
+>
+> *Historical baseline (reference-only):* Section on Bonus & Discounts under Overview, from `offers`: one card per live scheme in the customer's currency — title (scheme name), sentence (`summary` from Mito, e.g. `Complete 3 transfers within 30 days and get £10.00 bonus credit.`), `Ends DD/MM/YYYY` when set. Hidden when there are no offers or when blocked.
 
 ### 7.5 Send Money — "Use your bonus" (IP-7) — keep the approved design
 - Shown when available bonus credit in the transfer's **send currency** > 0 (today hard-coded to GBP — use the real currency).
