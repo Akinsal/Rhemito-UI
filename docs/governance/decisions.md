@@ -63,8 +63,8 @@
 ### `DEC-2026-11-17-STAGING-PAYMENT-GATEWAY` — Staging Payment Gateway Opening, Bonus/Promo Commission Alignment & Non-Silent Gateway Error Guard
 - **Date Approved:** 17 November 2026 (`2026-11-17`)
 - **Decision Owner / Approver:** Mohammad Mumtaz (Product Owner)
-- **Status:** `Human-Approved` (`Option 1 — Render Staging Rhemito-UI Fix Package`)
-- **Affected Files (`Rhemito-UI`):** `shared/sendMoney.ts`, `server/mitoRetail/index.ts`, `server/sendMoneyRoutes.ts`, `client/src/pages/SendMoney.tsx`
+- **Status:** `Human-Approved` (`Option 1 — Render Staging Rhemito-UI Fix Package` · `Verified`)
+- **Affected Files (`Rhemito-UI`):** `shared/sendMoney.ts`, `server/mitoRetail/index.ts`, `server/sendMoneyRoutes.ts`, `client/src/pages/SendMoney.tsx`, `tests/e2e/staging_payment_gateway.spec.js`
 - **Summary:**
   1. **Commission Alignment on Bonus & Promo Transfers:** Plain transfers (`!hasRewardOrPromo`) remain unchanged. When a Promo Code or Bonus Credit (`pay_less` or `send_more`) is applied, `sendAmountMinorForMito` reflects the payout boost (`send_more`) or net discount (`pay_less` / `fee` promo / `amount` promo, clamped `>= 100` minor units), while `commissionNum` is always aligned to `lockedRate.commission` (including on `sendMitoTransaction` retry) so `furp02-staging` (`POST /api/v1/Transaction/SendMoney`) never rejects the locked `rateId` for commission mismatch.
   2. **Newly Signed-Up Referee & `collectionMode` Beneficiary Resolution:** Step 3 (`POST /api/send-money/transactions`) persists optional recipient banking/mobile details, falls back `mitoUserId` to `DEFAULT_MITO_SENDER_USER_ID` when `registerOrSyncMitoRetailUser` returns `null`, and generates a deterministic per-user fallback phone suffix in `mapAuthUserToMitoCreatePayload` when mobile number is empty. Step 4 (`sendMitoForSendMoneyTx`) filters saved beneficiaries strictly by `collectionMode` (`BANKACCOUNT` vs `MOBILEMONEY`) and `receiveCurrency`, creates the Mito beneficiary on-demand if missing, and preserves `promoAtPayment` / `bonusCredit` (`mode` & `amount`) on `isMitoStep4Reclick`.
@@ -77,7 +77,7 @@
 - **Date Approved:** 17 November 2026 (`2026-11-17`)
 - **Decision Owner / Approver:** Mohammad Mumtaz (Product Owner — defect fix on `fix/staging-payment-gateway`)
 - **Status:** `Human-Approved` (`Verified`)
-- **Affected Files (`Rhemito-UI`):** `client/src/lib/unifiedTransactions.ts`, `client/src/pages/Dashboard.tsx`, `client/src/pages/Transactions.tsx`, `client/src/pages/SendMoney.tsx`, `client/src/__tests__/unified-transactions.test.ts`
+- **Affected Files (`Rhemito-UI`):** `client/src/lib/unifiedTransactions.ts`, `client/src/pages/Dashboard.tsx`, `client/src/pages/Transactions.tsx`, `client/src/pages/SendMoney.tsx`, `client/src/__tests__/unified-transactions.test.ts`, `tests/e2e/staging_payment_gateway.spec.js`
 - **Summary:**
   1. Added pure `sendMoneyDateSort(view, fallbackDateLabel)` helper in `unifiedTransactions.ts` computing full millisecond-precision sort timestamps (`Math.max(Date.parse(paidAt), Date.parse(createdAt))`) instead of parsing `toSendMoneyRow(view).date` (`"16 Nov 2026"`, midnight `00:00:00`), so newly completed Send Money transfers always appear at the top of `'All'` above earlier same-day Campaigns, Invoices, Money Requests, and earlier same-day Send Money transfers (preserving `toSendMoneyRow`'s contract return shape).
   2. Added deterministic `tx.id` tie-breaking in `Dashboard.tsx` and `Transactions.tsx` `mergedRows` sorting.
