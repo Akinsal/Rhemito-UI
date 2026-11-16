@@ -30,6 +30,7 @@ import { CancelTransactionModal, type TransactionDetails } from "@/components/Ca
 import AccountTypeToggle from "@/pages/Auth/components/AccountTypeToggle";
 import {
     cancelSendMoneyTransaction,
+    confirmSendMoneyGateway,
     createSendMoneyTransaction,
     fetchMitoAffiliateRate,
     fetchMitoBeneficiaries,
@@ -463,6 +464,10 @@ export default function SendMoney() {
     const [checkoutFlowMounting, setCheckoutFlowMounting] = useState(false);
     const [checkoutFlowError, setCheckoutFlowError] = useState<string | null>(null);
     const checkoutFlowContainerRef = useRef<HTMLDivElement | null>(null);
+    const transactionIdRef = useRef<string | null>(transactionId);
+    transactionIdRef.current = transactionId;
+    const gatewaySessionActiveRef = useRef<boolean>(false);
+    const refetchRewardsRef = useRef<() => unknown>(() => undefined);
 
     const syncSendMoneyCache = useCallback(
         (txView?: Awaited<ReturnType<typeof paySendMoneyTransaction>> | null) => {
@@ -489,6 +494,8 @@ export default function SendMoney() {
         (params: {
             rawStatus?: string | null;
             paymentStatus?: string | null;
+            paymentId?: string | null;
+            sessionId?: string | null;
             reason?: string | null;
             eventType?: string | null;
             reference?: string | null;
@@ -505,6 +512,30 @@ export default function SendMoney() {
             const resolvedRef = (params.reference || transactionRef || "").trim();
             if (resolvedRef) {
                 setTransactionRef(resolvedRef);
+            }
+            const resolvedJourneyCode = params.journeyCode || extractJourneyCodeFromUrl(mitoPayByBankUrl);
+            const activeTxId = transactionIdRef.current;
+            if (gatewaySessionActiveRef.current && activeTxId) {
+                gatewaySessionActiveRef.current = false;
+                void confirmSendMoneyGateway(activeTxId, {
+                    outcome: category,
+                    rawStatus: params.rawStatus || undefined,
+                    paymentStatus: params.paymentStatus || undefined,
+                    paymentId: params.paymentId || undefined,
+                    sessionId: params.sessionId || undefined,
+                    journeyCode: resolvedJourneyCode || undefined,
+                    reason: params.reason || undefined,
+                })
+                    .then((confirmedView) => {
+                        syncSendMoneyCache(confirmedView);
+                        void refetchRewardsRef.current();
+                    })
+                    .catch(() => {
+                        syncSendMoneyCache();
+                        void refetchRewardsRef.current();
+                    });
+            } else {
+                syncSendMoneyCache();
             }
             setMitoPayByBankUrl(null);
             setMitoCardPaymentSession(null);
@@ -526,10 +557,9 @@ export default function SendMoney() {
                 reference: resolvedRef || "PENDING",
                 paymentMethodLabel: effectiveMethodLabel,
                 reason: params.reason || undefined,
-                journeyCode: params.journeyCode || extractJourneyCodeFromUrl(mitoPayByBankUrl),
+                journeyCode: resolvedJourneyCode,
                 timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             });
-            syncSendMoneyCache();
             const shouldAutoRedirect =
                 params.autoRedirectHome !== undefined ? params.autoRedirectHome : true;
             const countdownSeconds =
@@ -689,6 +719,8 @@ export default function SendMoney() {
                         applyPaymentOutcomeRef.current({
                             rawStatus: normalizedStatus,
                             paymentStatus: rawCardStatus === "Approved" ? "Captured" : rawCardStatus,
+                            paymentId: paymentResponse?.id,
+                            sessionId: String((mitoCardPaymentSession as any)?.id || "") || undefined,
                             reference: transactionRefRef.current || paymentResponse?.id || "",
                             methodLabel: "Credit / Debit Card",
                             reason:
@@ -762,6 +794,7 @@ export default function SendMoney() {
                                     : inferredStatus === "CANCELLED"
                                     ? "Cancelled"
                                     : "Declined",
+                            sessionId: String((mitoCardPaymentSession as any)?.id || "") || undefined,
                             reference: transactionRefRef.current,
                             methodLabel: "Credit / Debit Card",
                             reason:
@@ -811,12 +844,45 @@ export default function SendMoney() {
         };
     }, [mitoCardPaymentSession, mitoCheckoutPublicKey, currentStep]);
 
-    // Intercept Checkout.com 3DS redirect messages in the CAPTURE phase so Checkout.com's SDK never calls
-    // window.location.replace(...) to an external domain (such as rhemito-web-nextjs-dev.herokuapp.com),
-    // and instead resolves and displays the Payment Status screen directly on our domain.
+    // Non-destructive bubble-phase listener ONLY for explicit terminal statuses posted by our own
+    // Rhemito return-URL child iframe. Never attach in capture phase, never call stopImmediatePropagation(),
+    // and never intercept *.checkout.com messages so CheckoutWebComponents runs native 3DS2 uninterrupted.
     useEffect(() => {
         if (!mitoCardPaymentSession || currentStep !== 4) return;
-        const handleCard3dsMessage = (event: MessageEvent) => {
+        const TERMINAL_CARD_STATUSES = new Set([
+            "COMPSUCCESS",
+            "COMPFAILED",
+            "APPROVED",
+            "CAPTURED",
+            "AUTHORIZED",
+            "PAID",
+            "DECLINED",
+            "FAILED",
+            "CANCELLED",
+            "CANCELED",
+            "EXPIRED",
+        ]);
+        const handleCardReturnMessage = (event: MessageEvent) => {
+            const originStr = String(event?.origin || "").trim();
+            if (originStr) {
+                try {
+                    const originHost = new URL(originStr).hostname.toLowerCase();
+                    if (originHost === "checkout.com" || originHost.endsWith(".checkout.com")) {
+                        return;
+                    }
+                    if (
+                        typeof window !== "undefined" &&
+                        event.origin !== window.location.origin &&
+                        !originHost.endsWith("rhemito-ui.onrender.com") &&
+                        !originHost.endsWith("rhemito.com")
+                    ) {
+                        return;
+                    }
+                } catch {
+                    return;
+                }
+            }
+
             let data = event?.data;
             if (typeof data === "string") {
                 try {
@@ -826,121 +892,41 @@ export default function SendMoney() {
                 }
             }
             if (!data || typeof data !== "object") return;
-
-            const isCheckoutRedirectMsg =
+            if (
                 data.type === "redirect" ||
                 typeof data.payload?.url === "string" ||
-                (typeof data.url === "string" && (data.payment_id || data.payment_session_id));
-
-            if (isCheckoutRedirectMsg) {
-                event.stopImmediatePropagation();
-                event.stopPropagation();
-
-                const redirectUrl = String(data.payload?.url || data.url || "").trim();
-                const paymentId = String(data.payload?.payment_id || data.payment_id || "").trim();
-                const sessionId = String(data.payload?.payment_session_id || data.payment_session_id || "").trim();
-                const redirectReason = String(data.payload?.redirect_reason || data.redirect_reason || "").trim();
-                const parsedLocal = extractCardOutcomeFromUrl(redirectUrl);
-                const host = parsedLocal?.hostname || "";
-                const needsServerCallback =
-                    host.endsWith("checkout.com") ||
-                    host.endsWith("funtechcom.com") ||
-                    host.endsWith("mito.money") ||
-                    (!parsedLocal?.status && !parsedLocal?.paymentStatus && Boolean(redirectUrl));
-
-                if (!needsServerCallback && (parsedLocal?.status || parsedLocal?.paymentStatus)) {
-                    applyPaymentOutcomeRef.current({
-                        rawStatus: parsedLocal.status || parsedLocal.paymentStatus || "COMPSUCCESS",
-                        paymentStatus: parsedLocal.paymentStatus || undefined,
-                        reference:
-                            parsedLocal.tnxref ||
-                            transactionRefRef.current ||
-                            parsedLocal.ckoSessionId ||
-                            paymentId,
-                        methodLabel: "Credit / Debit Card",
-                        reason: parsedLocal.reason || undefined,
-                        journeyCode: parsedLocal.journeyCode || undefined,
-                        autoRedirectHome: true,
-                    });
-                    return;
-                }
-
-                void fetch("/api/send-money/mito/resolve-card-redirect", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        url: redirectUrl,
-                        paymentId,
-                        sessionId,
-                        redirectReason,
-                    }),
-                })
-                    .then((r) => r.json().catch(() => ({})))
-                    .then((resolved: any) => {
-                        const effectiveStatus =
-                            resolved?.status ||
-                            parsedLocal?.status ||
-                            resolved?.paymentStatus ||
-                            parsedLocal?.paymentStatus ||
-                            (redirectReason.toLowerCase().includes("fail") ||
-                            redirectReason.toLowerCase().includes("declin")
-                                ? "COMPFAILED"
-                                : redirectReason.toLowerCase().includes("cancel")
-                                ? "CANCELLED"
-                                : "COMPSUCCESS");
-                        const effectivePaymentStatus =
-                            resolved?.paymentStatus ||
-                            parsedLocal?.paymentStatus ||
-                            (classifyPaymentOutcome(effectiveStatus, resolved?.reason || redirectReason) === "completed"
-                                ? "Captured"
-                                : undefined);
-                        applyPaymentOutcomeRef.current({
-                            rawStatus: effectiveStatus,
-                            paymentStatus: effectivePaymentStatus,
-                            reference:
-                                resolved?.tnxref ||
-                                parsedLocal?.tnxref ||
-                                transactionRefRef.current ||
-                                resolved?.ckoSessionId ||
-                                paymentId,
-                            methodLabel: "Credit / Debit Card",
-                            reason: resolved?.reason || parsedLocal?.reason || undefined,
-                            journeyCode: resolved?.journeyCode || parsedLocal?.journeyCode || undefined,
-                            autoRedirectHome: true,
-                        });
-                    })
-                    .catch(() => {
-                        applyPaymentOutcomeRef.current({
-                            rawStatus: parsedLocal?.status || "COMPSUCCESS",
-                            paymentStatus: parsedLocal?.paymentStatus || "Captured",
-                            reference: parsedLocal?.tnxref || transactionRefRef.current || paymentId,
-                            methodLabel: "Credit / Debit Card",
-                            reason: parsedLocal?.reason || undefined,
-                            autoRedirectHome: true,
-                        });
-                    });
+                (typeof data.url === "string" && (data.payment_id || data.payment_session_id))
+            ) {
                 return;
             }
+            if (typeof data.status !== "string" || !data.status.trim()) return;
 
-            if (typeof data.status === "string" && data.status.trim()) {
-                const raw = data.status.trim();
-                const mapped = raw.toUpperCase() === "APPROVED" ? "COMPSUCCESS" : raw;
-                applyPaymentOutcomeRef.current({
-                    rawStatus: mapped,
-                    paymentStatus: typeof data.paymentStatus === "string" ? data.paymentStatus : undefined,
-                    reference: data.tnxref || data.id || transactionRefRef.current,
-                    methodLabel: "Credit / Debit Card",
-                    reason: data.reason || data.message || undefined,
-                    autoRedirectHome: true,
-                });
-            }
+            const raw = data.status.trim();
+            const upper = raw.toUpperCase();
+            if (!TERMINAL_CARD_STATUSES.has(upper)) return;
+
+            const mapped = upper === "APPROVED" ? "COMPSUCCESS" : raw;
+            applyPaymentOutcomeRef.current({
+                rawStatus: mapped,
+                paymentStatus: typeof data.paymentStatus === "string" ? data.paymentStatus : undefined,
+                paymentId: typeof data.paymentId === "string" ? data.paymentId : undefined,
+                sessionId:
+                    typeof data.ckoSessionId === "string"
+                        ? data.ckoSessionId
+                        : String((mitoCardPaymentSession as any)?.id || "") || undefined,
+                reference: data.tnxref || data.id || transactionRefRef.current,
+                methodLabel: "Credit / Debit Card",
+                reason: data.reason || data.message || undefined,
+                journeyCode: typeof data.journeyCode === "string" ? data.journeyCode : undefined,
+                autoRedirectHome: true,
+            });
         };
-        window.addEventListener("message", handleCard3dsMessage, true);
-        return () => window.removeEventListener("message", handleCard3dsMessage, true);
+        window.addEventListener("message", handleCardReturnMessage, false);
+        return () => window.removeEventListener("message", handleCardReturnMessage, false);
     }, [mitoCardPaymentSession, currentStep]);
 
     // If Mito redirects back to our returnUrl with ?tnxref=...&status=... (either in an iframe or top-level window),
-    // forward it to the parent window if in an iframe, or display the full-page Payment Status view if top-level.
+    // forward explicit terminal outcomes to the parent window if in an iframe, or display Payment Status if top-level.
     useEffect(() => {
         if (typeof window === "undefined") return;
         const extracted = extractCardOutcomeFromUrl(window.location.href);
@@ -954,26 +940,52 @@ export default function SendMoney() {
             window.location.pathname.toLowerCase() === "/send/status" || Boolean(paymentStatus);
 
         if (window.parent !== window) {
-            if (status || tnxref || journeyCodeParam || ckoSessionId) {
+            if (status) {
                 window.parent.postMessage(
                     {
-                        status: status || (ckoSessionId ? "AUTHORIZED" : undefined),
+                        status,
                         paymentStatus: paymentStatus || undefined,
                         tnxref: tnxref || ckoSessionId,
+                        ckoSessionId: ckoSessionId || undefined,
                         reason,
                         journeyCode: journeyCodeParam,
                         methodLabel: isCardCallbackPath || ckoSessionId ? "Credit / Debit Card" : undefined,
                     },
-                    "*",
+                    window.location.origin || "*",
                 );
+            } else if (ckoSessionId) {
+                void fetch("/api/send-money/mito/resolve-card-redirect", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ url: window.location.href, sessionId: ckoSessionId }),
+                })
+                    .then((r) => r.json().catch(() => ({})))
+                    .then((resolved: any) => {
+                        const explicitStatus = resolved?.status || resolved?.paymentStatus || null;
+                        if (!explicitStatus) return;
+                        window.parent.postMessage(
+                            {
+                                status: explicitStatus,
+                                paymentStatus: resolved?.paymentStatus || undefined,
+                                tnxref: resolved?.tnxref || tnxref || ckoSessionId,
+                                ckoSessionId,
+                                reason: resolved?.reason || reason,
+                                journeyCode: resolved?.journeyCode || journeyCodeParam,
+                                methodLabel: "Credit / Debit Card",
+                            },
+                            window.location.origin || "*",
+                        );
+                    })
+                    .catch(() => {});
             }
             return;
         }
 
-        if (status || ckoSessionId) {
+        if (status) {
             applyPaymentOutcome({
-                rawStatus: status || "AUTHORIZED",
-                paymentStatus: paymentStatus || (ckoSessionId ? "Captured" : undefined),
+                rawStatus: status,
+                paymentStatus: paymentStatus || undefined,
+                sessionId: ckoSessionId,
                 reason,
                 reference: tnxref || ckoSessionId,
                 journeyCode: journeyCodeParam,
@@ -984,6 +996,34 @@ export default function SendMoney() {
             } catch {
                 // ignore history errors
             }
+        } else if (ckoSessionId) {
+            void fetch("/api/send-money/mito/resolve-card-redirect", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ url: window.location.href, sessionId: ckoSessionId }),
+            })
+                .then((r) => r.json().catch(() => ({})))
+                .then((resolved: any) => {
+                    const explicitStatus = resolved?.status || resolved?.paymentStatus || null;
+                    if (!explicitStatus) return;
+                    applyPaymentOutcome({
+                        rawStatus: explicitStatus,
+                        paymentStatus: resolved?.paymentStatus || undefined,
+                        sessionId: ckoSessionId,
+                        reason: resolved?.reason || reason,
+                        reference: resolved?.tnxref || tnxref || ckoSessionId,
+                        journeyCode: resolved?.journeyCode || journeyCodeParam,
+                        methodLabel: "Credit / Debit Card",
+                    });
+                })
+                .catch(() => {})
+                .finally(() => {
+                    try {
+                        window.history.replaceState({}, "", "/send-money");
+                    } catch {
+                        // ignore history errors
+                    }
+                });
         } else if (journeyCodeParam) {
             void fetchMitoJourneyStatus(journeyCodeParam).then((jStatus) => {
                 if (!jStatus) return;
@@ -1213,6 +1253,7 @@ export default function SendMoney() {
 
     // Referral bonus — live wallet from the rewards API (US-5.2 / US-5.3)
     const rewards = useRewards();
+    refetchRewardsRef.current = () => rewards.refetch();
     const activeOffer =
         rewards.data?.offers?.find(
             (o) =>
@@ -2302,6 +2343,7 @@ export default function SendMoney() {
                 affiliateRateId: affiliateRateId || undefined,
                 ...(promoApplied && promoCode ? { promoCode, feeBeforePromo: fee.toFixed(2), ...(promoOnAmount ? { promoAppliesTo: "amount" as const, promoDiscount: amountPromoDiscount.toFixed(2) } : {}) } : {}),
             });
+            gatewaySessionActiveRef.current = false;
             setTransactionId(created.id);
             setTransactionRef(created.reference);
             if (created.mitoRateId) setLockedRateId(created.mitoRateId);
@@ -5143,6 +5185,18 @@ export default function SendMoney() {
                                                         <button
                                                             type="button"
                                                             onClick={() => {
+                                                                if (gatewaySessionActiveRef.current && transactionId) {
+                                                                    gatewaySessionActiveRef.current = false;
+                                                                    void confirmSendMoneyGateway(transactionId, {
+                                                                        outcome: "cancelled",
+                                                                        reason: "Changed payment method",
+                                                                    })
+                                                                        .then((v) => {
+                                                                            syncSendMoneyCache(v);
+                                                                            void rewards.refetch();
+                                                                        })
+                                                                        .catch(() => {});
+                                                                }
                                                                 setMitoCardPaymentSession(null);
                                                                 setCheckoutFlowError(null);
                                                             }}
@@ -5240,6 +5294,7 @@ export default function SendMoney() {
                                                             syncSendMoneyCache(paidTx);
                                                             void rewards.refetch();
                                                             if (method.id === "card" && paidTx?.mitoPaymentSession) {
+                                                                gatewaySessionActiveRef.current = true;
                                                                 setMitoCardPaymentSession(paidTx.mitoPaymentSession);
                                                                 return;
                                                             }
@@ -5253,6 +5308,7 @@ export default function SendMoney() {
                                                                           : null
                                                                     : null;
                                                             if (hostedCardUrl) {
+                                                                gatewaySessionActiveRef.current = true;
                                                                 setMitoPayByBankUrl(hostedCardUrl);
                                                                 return;
                                                             }
@@ -5266,6 +5322,7 @@ export default function SendMoney() {
                                                                           : null
                                                                     : null;
                                                             if (instantBankUrl) {
+                                                                gatewaySessionActiveRef.current = true;
                                                                 setMitoPayByBankUrl(instantBankUrl);
                                                                 return;
                                                             }

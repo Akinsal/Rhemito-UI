@@ -571,6 +571,37 @@ export async function paySendMoneyTransaction(
   return (json as { data: SendMoneyTransactionView }).data;
 }
 
+export interface ConfirmGatewayInput {
+  outcome: "completed" | "processing" | "failed" | "cancelled" | "expired";
+  rawStatus?: string;
+  paymentStatus?: string;
+  paymentId?: string;
+  sessionId?: string;
+  journeyCode?: string;
+  reason?: string;
+}
+
+export async function confirmSendMoneyGateway(
+  id: string,
+  input: ConfirmGatewayInput,
+): Promise<SendMoneyTransactionView> {
+  const res = await fetch(`/api/send-money/transactions/${encodeURIComponent(id)}/confirm-gateway`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(input),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new SendMoneyApiError(
+      res.status,
+      String(json?.error?.code ?? "CONFIRM_GATEWAY_FAILED"),
+      String(json?.error?.message ?? "The payment confirmation could not be recorded. Please try again."),
+    );
+  }
+  return (json as { data: SendMoneyTransactionView }).data;
+}
+
 export async function cancelSendMoneyTransaction(id: string): Promise<void> {
   await apiRequest("POST", `/api/send-money/transactions/${encodeURIComponent(id)}/cancel`, {});
 }

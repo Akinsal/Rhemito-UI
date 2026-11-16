@@ -9,6 +9,7 @@
 
 import type { Express, Request, Response } from "express";
 import { randomUUID } from "crypto";
+import { z } from "zod";
 import { storage } from "./storage";
 import { demoModeEnabled } from "./config";
 import { dispatchNotification } from "./notificationService";
@@ -957,9 +958,8 @@ export function registerSendMoneyRoutes(app: Express): void {
 
         const host = info?.hostname || "";
         const isCallbackHost =
-          host.endsWith("checkout.com") ||
-          host.endsWith("funtechcom.com") ||
-          host.endsWith("mito.money");
+          !host.endsWith("checkout.com") &&
+          (host.endsWith("funtechcom.com") || host.endsWith("mito.money"));
 
         if (!isCallbackHost || (outcome?.status && outcome?.tnxref && !isCallbackHost)) {
           break;
@@ -998,14 +998,15 @@ export function registerSendMoneyRoutes(app: Express): void {
         }
       }
 
+      const reasonLower = redirectReason.toLowerCase();
       const effectiveStatus =
         outcome?.status ||
         outcome?.paymentStatus ||
-        (redirectReason.toLowerCase().includes("fail") || redirectReason.toLowerCase().includes("declin")
+        (reasonLower.includes("fail") || reasonLower.includes("declin")
           ? "COMPFAILED"
-          : redirectReason.toLowerCase().includes("cancel")
+          : reasonLower.includes("cancel")
           ? "CANCELLED"
-          : "COMPSUCCESS");
+          : null);
 
       return res.json({
         tnxref: outcome?.tnxref || null,
@@ -1789,7 +1790,17 @@ export function registerSendMoneyRoutes(app: Express): void {
         tx.status === "completed" &&
         Boolean(tx.mitoPaymentSession || tx.mitoPaymentUrl || tx.mitoTransactionId);
 
-      if (tx.status !== "awaiting_payment" && !isMitoStep4Reclick) {
+      const hasPriorStep4Reservation =
+        (tx.status === "awaiting_payment" || (isMitoRetailConfigured() && tx.status === "pending")) &&
+        Boolean(
+          tx.paymentMethod ||
+            tx.promoRedeemedAt ||
+            (tx.bonusCreditMinor && tx.bonusCreditMinor > 0) ||
+            tx.mitoPaymentSession ||
+            tx.mitoPaymentUrl,
+        );
+
+      if (tx.status !== "awaiting_payment" && !hasPriorStep4Reservation && !isMitoStep4Reclick) {
         throw new SendMoneyError(409, "INVALID_STATE", "Only a transaction awaiting payment can be paid.");
       }
 
@@ -1873,18 +1884,63 @@ export function registerSendMoneyRoutes(app: Express): void {
         return res.json({ data: toView(reUpdated) });
       }
 
-      // If the customer switched from a Step-1 promo code to a Step-4 bonus credit, drop the draft promo
-      const switchedPromoToBonus = Boolean(tx.promoCode && parsed.data.bonusCredit && !parsed.data.promoCode);
-      const effectiveTx: SendMoneyTransaction = switchedPromoToBonus
+      // Re-click / retry safety while awaiting gateway confirmation: release any previously held Step-4 promo/bonus
+      // before re-evaluating the customer's new payment method or reward selection.
+      if (hasPriorStep4Reservation) {
+        if (tx.promoCode && (tx.promoRedeemedAt || tx.paymentMethod || tx.mitoPaymentSession || tx.mitoPaymentUrl)) {
+          await promo.releaseForPayment(tx.reference);
+        }
+        if (tx.bonusCreditMinor && tx.bonusCreditMinor > 0) {
+          await bonus.releaseForPayment(userId, tx.reference);
+        }
+      }
+
+      const priorRateNum = Number(tx.exchangeRate);
+      const restoredReceiveMinor =
+        hasPriorStep4Reservation &&
+        tx.bonusCreditMode === "send_more" &&
+        (tx.bonusCreditMinor ?? 0) > 0 &&
+        Number.isFinite(priorRateNum) &&
+        priorRateNum > 0
+          ? toMinorUnits(
+              (Number(fromMinorUnits(tx.sendAmountMinor, tx.sendCurrency)) * priorRateNum).toFixed(
+                tx.receiveCurrency.toUpperCase() === "JPY" ? 0 : 2,
+              ),
+              tx.receiveCurrency,
+            )
+          : tx.receiveAmountMinor;
+
+      const baseTx: SendMoneyTransaction = hasPriorStep4Reservation
         ? {
             ...tx,
+            status: "awaiting_payment",
+            paymentMethod: null,
+            promoCode: null,
+            feeMinor: tx.feeBeforePromoMinor ?? tx.feeMinor,
+            feeBeforePromoMinor: null,
+            promoDiscountMinor: null,
+            promoAppliesTo: undefined,
+            promoRedeemedAt: null,
+            bonusCreditMinor: null,
+            bonusCreditMode: null,
+            receiveAmountMinor: restoredReceiveMinor,
+            mitoPaymentSession: null,
+            mitoPaymentUrl: null,
+          }
+        : tx;
+
+      // If the customer switched from a Step-1 promo code to a Step-4 bonus credit, drop the draft promo
+      const switchedPromoToBonus = Boolean(baseTx.promoCode && parsed.data.bonusCredit && !parsed.data.promoCode);
+      const effectiveTx: SendMoneyTransaction = switchedPromoToBonus
+        ? {
+            ...baseTx,
             promoCode: null,
             promoDiscountMinor: null,
             promoAppliesTo: undefined,
-            feeMinor: tx.feeBeforePromoMinor ?? tx.feeMinor,
+            feeMinor: baseTx.feeBeforePromoMinor ?? baseTx.feeMinor,
             feeBeforePromoMinor: null,
           }
-        : tx;
+        : baseTx;
 
       // Promo codes belong to Mito Money: the code is re-checked for this customer and payment method and its use
       // recorded once (against the transfer reference) before any money moves (PROMO-RHEMITO P-20 – P-25).
@@ -1918,11 +1974,19 @@ export function registerSendMoneyRoutes(app: Express): void {
           promoAtPayment,
           bonusAtPayment,
         );
+      const hasDirectGatewayTarget = Boolean(
+        mitoSendPatch.mitoTransactionId ||
+          mitoSendPatch.mitoPaymentSession ||
+          mitoSendPatch.mitoPaymentUrl,
+      );
       const mitoPatch = {
-        ...(tx.mitoTransactionId ? {} : await initiateHostedForSendMoneyTx(effectiveTx, userId, req)),
+        ...(tx.mitoTransactionId || hasDirectGatewayTarget
+          ? {}
+          : await initiateHostedForSendMoneyTx(effectiveTx, userId, req)),
         ...mitoSendPatch,
       };
 
+      let hasDeferredGatewaySession = false;
       if (
         isMitoRetailConfigured() &&
         (parsed.data.paymentMethod === "card" || parsed.data.paymentMethod === "instant_bank")
@@ -1935,7 +1999,8 @@ export function registerSendMoneyRoutes(app: Express): void {
               )
             : Boolean(
                 (mitoPatch.mitoPaymentUrl && mitoPatch.mitoPaymentUrl.startsWith("http")) ||
-                  (mitoPatch.mitoHostedUrl && mitoPatch.mitoHostedUrl.startsWith("http")),
+                  (mitoPatch.mitoHostedUrl && mitoPatch.mitoHostedUrl.startsWith("http")) ||
+                  (tx.mitoHostedUrl && tx.mitoHostedUrl.startsWith("http")),
               );
         if (!hasValidGatewayTarget) {
           if (promoAtPayment) await promo.releaseForPayment(tx.reference);
@@ -1947,22 +2012,25 @@ export function registerSendMoneyRoutes(app: Express): void {
               "We couldn't open the payment gateway right now. Please try again or choose another payment method.",
           );
         }
+        hasDeferredGatewaySession = true;
       }
 
-      const status = statusForPaymentMethod(parsed.data.paymentMethod);
+      const status = hasDeferredGatewaySession
+        ? "awaiting_payment"
+        : statusForPaymentMethod(parsed.data.paymentMethod);
       const now = new Date();
       const receiveAmountPatch: Partial<SendMoneyTransaction> = (() => {
-        const rateNum = Number(tx.exchangeRate);
+        const rateNum = Number(effectiveTx.exchangeRate);
         if (!Number.isFinite(rateNum) || rateNum <= 0) return {};
         const extraMinor = bonusAtPayment?.mode === "send_more" && bonusAtPayment.amountMinor > 0 ? bonusAtPayment.amountMinor : 0;
-        const decimals = tx.receiveCurrency.toUpperCase() === "JPY" ? 0 : 2;
+        const decimals = effectiveTx.receiveCurrency.toUpperCase() === "JPY" ? 0 : 2;
         const expectedReceiveMinor = toMinorUnits(
-          (Number(fromMinorUnits(tx.sendAmountMinor + extraMinor, tx.sendCurrency)) * rateNum).toFixed(decimals),
-          tx.receiveCurrency,
+          (Number(fromMinorUnits(effectiveTx.sendAmountMinor + extraMinor, effectiveTx.sendCurrency)) * rateNum).toFixed(decimals),
+          effectiveTx.receiveCurrency,
         );
-        if (extraMinor === 0 && tx.receiveAmountMinor === expectedReceiveMinor) return {};
-        // Update when send_more is chosen on Step 4 OR when Step 1 send_more was switched to pay_less/none on Step 4
-        if (extraMinor > 0 || tx.receiveAmountMinor > expectedReceiveMinor) {
+        if (!hasPriorStep4Reservation && extraMinor === 0 && tx.receiveAmountMinor === expectedReceiveMinor) return {};
+        // Update when send_more is chosen on Step 4 OR when prior send_more was switched to pay_less/none on Step 4
+        if (extraMinor > 0 || tx.receiveAmountMinor !== expectedReceiveMinor) {
           return { receiveAmountMinor: expectedReceiveMinor };
         }
         return {};
@@ -1970,7 +2038,23 @@ export function registerSendMoneyRoutes(app: Express): void {
       let updated: SendMoneyTransaction | undefined;
       try {
         updated = await storage.updateSendMoneyTransaction(tx.id, {
+          ...(hasPriorStep4Reservation
+            ? {
+                promoCode: null,
+                feeBeforePromoMinor: null,
+                feeMinor: effectiveTx.feeMinor,
+                promoDiscountMinor: null,
+                promoAppliesTo: null,
+                promoRedeemedAt: null,
+                bonusCreditMinor: null,
+                bonusCreditMode: null,
+                mitoPaymentSession: null,
+                mitoPaymentUrl: null,
+              }
+            : {}),
           ...mitoPatch,
+          ...(parsed.data.paymentMethod === "instant_bank" ? { mitoPaymentSession: null } : {}),
+          ...(parsed.data.paymentMethod === "card" && mitoPatch.mitoPaymentSession ? { mitoPaymentUrl: null } : {}),
           ...receiveAmountPatch,
           paymentMethod: parsed.data.paymentMethod,
           status,
@@ -2003,6 +2087,129 @@ export function registerSendMoneyRoutes(app: Express): void {
         bonus.onTransferStatus(userId, updated, "PAID");
         bonus.onTransferStatus(userId, updated, "COMPLETED");
       }
+      return res.json({ data: toView(updated) });
+    } catch (err) {
+      handleError(res, err);
+    }
+  });
+
+  const confirmSendMoneyGatewaySchema = z.object({
+    outcome: z.enum(["completed", "processing", "failed", "cancelled", "expired"]),
+    rawStatus: z.string().trim().max(120).optional(),
+    paymentStatus: z.string().trim().max(120).optional(),
+    paymentId: z.string().trim().max(160).optional(),
+    sessionId: z.string().trim().max(160).optional(),
+    journeyCode: z.string().trim().max(160).optional(),
+    reason: z.string().trim().max(500).optional(),
+  });
+
+  /**
+   * Step 4 Two-Phase Gateway Confirmation:
+   * Finalizes or rolls back a gateway-backed payment session (Checkout.com 3DS / Plaid / Mito Hosted)
+   * only after the customer's interactive payment flow actually completes, fails, cancels, or expires.
+   */
+  app.post("/api/send-money/transactions/:id/confirm-gateway", async (req: Request, res: Response) => {
+    try {
+      const userId = requireStrictAuth(req);
+      const tx = await getOwnedTransaction(req.params.id, userId);
+      const parsed = confirmSendMoneyGatewaySchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        throw new SendMoneyError(400, "VALIDATION_ERROR", firstZodMessage(parsed.error));
+      }
+
+      const { outcome, paymentId, sessionId } = parsed.data;
+      const paymentRef = paymentId || sessionId || undefined;
+
+      if (outcome === "completed") {
+        if (tx.status === "completed") {
+          return res.json({ data: toView(tx) });
+        }
+        if (tx.status === "cancelled") {
+          throw new SendMoneyError(409, "INVALID_STATE", "A cancelled transaction cannot be completed.");
+        }
+        const now = new Date();
+        const updated =
+          (await storage.updateSendMoneyTransaction(tx.id, {
+            status: "completed",
+            paidAt: tx.paidAt ?? now,
+            ...(tx.promoCode ? { promoRedeemedAt: tx.promoRedeemedAt ?? now } : {}),
+            ...(paymentRef ? { mitoPaymentReference: paymentRef } : {}),
+            mitoPaymentSession: null,
+          })) ?? tx;
+
+        await dispatchNotification({ userId, type: "transaction_complete", data: notificationData(updated) });
+        const event = {
+          reference: updated.reference,
+          sendAmount: Number(fromMinorUnits(updated.sendAmountMinor, updated.sendCurrency)),
+          sendCurrency: updated.sendCurrency,
+          receiveCurrency: updated.receiveCurrency,
+          createdAt: updated.createdAt,
+        };
+        void onTransferEvent(userId, event, "PAID").then(() => onTransferEvent(userId, event, "COMPLETED"));
+        promo.onTransferStatus(userId, updated, "PAID");
+        promo.onTransferStatus(userId, updated, "COMPLETED");
+        bonus.onTransferStatus(userId, updated, "PAID");
+        bonus.onTransferStatus(userId, updated, "COMPLETED");
+        return res.json({ data: toView(updated) });
+      }
+
+      if (outcome === "processing") {
+        if (tx.status === "completed") {
+          return res.json({ data: toView(tx) });
+        }
+        if (tx.status === "awaiting_payment" || tx.status === "pending") {
+          const updated =
+            (await storage.updateSendMoneyTransaction(tx.id, {
+              status: "pending",
+              ...(paymentRef ? { mitoPaymentReference: paymentRef } : {}),
+            })) ?? tx;
+          return res.json({ data: toView(updated) });
+        }
+        return res.json({ data: toView(tx) });
+      }
+
+      // outcome === "failed" | "cancelled" | "expired"
+      if (tx.status === "completed") {
+        return res.json({ data: toView(tx) });
+      }
+      if (tx.promoCode) {
+        await promo.releaseForPayment(tx.reference).catch(() => {});
+      }
+      if (tx.bonusCreditMinor && tx.bonusCreditMinor > 0) {
+        await bonus.releaseForPayment(userId, tx.reference).catch(() => {});
+      }
+
+      const rateNum = Number(tx.exchangeRate);
+      const baseReceivePatch: Partial<SendMoneyTransaction> =
+        tx.bonusCreditMode === "send_more" && (tx.bonusCreditMinor ?? 0) > 0 && Number.isFinite(rateNum) && rateNum > 0
+          ? {
+              receiveAmountMinor: toMinorUnits(
+                (Number(fromMinorUnits(tx.sendAmountMinor, tx.sendCurrency)) * rateNum).toFixed(
+                  tx.receiveCurrency.toUpperCase() === "JPY" ? 0 : 2,
+                ),
+                tx.receiveCurrency,
+              ),
+            }
+          : {};
+
+      const updated =
+        (await storage.updateSendMoneyTransaction(tx.id, {
+          ...baseReceivePatch,
+          status: "awaiting_payment",
+          paidAt: null,
+          paymentMethod: null,
+          promoCode: null,
+          feeMinor: tx.feeBeforePromoMinor ?? tx.feeMinor,
+          feeBeforePromoMinor: null,
+          promoDiscountMinor: null,
+          promoAppliesTo: null,
+          promoRedeemedAt: null,
+          bonusCreditMinor: null,
+          bonusCreditMode: null,
+          mitoPaymentSession: null,
+          mitoPaymentUrl: null,
+        })) ?? tx;
+
       return res.json({ data: toView(updated) });
     } catch (err) {
       handleError(res, err);
@@ -2184,22 +2391,25 @@ export function registerSendMoneyRoutes(app: Express): void {
       const paymentReference = String(data?.paymentReference || "").trim();
 
       if (!isKycEvent || partnerRef || transactionRef || paymentReference) {
-        const allTxs = await storage.listAllSendMoneyTransactions();
-        matchedTransaction = allTxs.find((t) => {
-          if (partnerRef && (t.reference === partnerRef || t.id === partnerRef)) return true;
-          if (
-            transactionRef &&
-            (String(t.mitoTransactionId || "") === transactionRef ||
-              String(t.mitoReference || "") === transactionRef ||
-              t.reference === transactionRef)
-          ) {
-            return true;
-          }
-          if (paymentReference && String(t.mitoPaymentReference || "") === paymentReference) {
-            return true;
-          }
-          return false;
-        });
+        const allTxs = [...(await storage.listAllSendMoneyTransactions())].reverse();
+        matchedTransaction =
+          (partnerRef
+            ? allTxs.find((t) => t.reference === partnerRef || t.id === partnerRef)
+            : undefined) ??
+          allTxs.find((t) => {
+            if (
+              transactionRef &&
+              (String(t.mitoTransactionId || "") === transactionRef ||
+                String(t.mitoReference || "") === transactionRef ||
+                t.reference === transactionRef)
+            ) {
+              return true;
+            }
+            if (paymentReference && String(t.mitoPaymentReference || "") === paymentReference) {
+              return true;
+            }
+            return false;
+          });
 
         if (matchedTransaction) {
           const effectiveStatus = dataStatusLower || eventTypeLower;
@@ -2217,6 +2427,10 @@ export function registerSendMoneyRoutes(app: Express): void {
             effectiveStatus === "transaction_completed" ||
             effectiveStatus === "transaction_paid" ||
             effectiveStatus === "payment_received" ||
+            effectiveStatus === "payment_collected" ||
+            effectiveStatus === "payment_captured" ||
+            effectiveStatus === "compsuccess" ||
+            effectiveStatus === "processed" ||
             effectiveStatus === "completed" ||
             effectiveStatus === "paid" ||
             effectiveStatus === "successful" ||
@@ -2224,11 +2438,15 @@ export function registerSendMoneyRoutes(app: Express): void {
             effectiveStatus === "success"
           ) {
             const wasCompleted = matchedTransaction.status === "completed";
+            const now = new Date();
             const updatedTx =
               (await storage.updateSendMoneyTransaction(matchedTransaction.id, {
                 ...txPatch,
                 status: "completed",
-                paidAt: matchedTransaction.paidAt ?? new Date(),
+                paidAt: matchedTransaction.paidAt ?? now,
+                ...(matchedTransaction.promoCode
+                  ? { promoRedeemedAt: matchedTransaction.promoRedeemedAt ?? now }
+                  : {}),
               })) ?? matchedTransaction;
             matchedTransaction = updatedTx;
             transactionTransition = "completed";
