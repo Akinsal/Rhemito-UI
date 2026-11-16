@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import { useRewards } from "@/hooks/use-rewards";
 import { useContacts } from "@/contexts/ContactsContext";
 import { BONUS_COPY, UseBonusCredit, balanceFor, creditToApply, eligibleBonusBalance, formatMoney, type BonusChoice } from "@/features/bonus";
@@ -516,11 +517,23 @@ export default function SendMoney() {
         [mitoPayByBankUrl, paymentMethod, transactionRef],
     );
 
+    const { user: authUser } = useAuth();
+    const resolvedCardholderName =
+        [authUser?.firstName, authUser?.middleName, authUser?.lastName]
+            .map((part) => (part || "").trim())
+            .filter(Boolean)
+            .join(" ") ||
+        (authUser?.businessName || "").trim() ||
+        "";
+    const cardholderNameRef = useRef<string>(resolvedCardholderName);
+    cardholderNameRef.current = resolvedCardholderName;
+
     const applyPaymentOutcomeRef = useRef(applyPaymentOutcome);
     applyPaymentOutcomeRef.current = applyPaymentOutcome;
     const transactionRefRef = useRef(transactionRef);
     transactionRefRef.current = transactionRef;
     const mountedSessionKeyRef = useRef<string>("");
+    const checkoutFlowReadyRef = useRef<boolean>(false);
 
     // After showing the Payment Status screen, count down so the customer can clearly see
     // the payment status before redirecting to the Home page ("/").
@@ -540,6 +553,7 @@ export default function SendMoney() {
     useEffect(() => {
         if (!mitoCardPaymentSession || currentStep !== 4) {
             mountedSessionKeyRef.current = "";
+            checkoutFlowReadyRef.current = false;
             return;
         }
         const sessionKey = String(
@@ -552,6 +566,7 @@ export default function SendMoney() {
             return;
         }
         mountedSessionKeyRef.current = sessionKey;
+        checkoutFlowReadyRef.current = false;
 
         let cancelled = false;
         let flowInstance: any = null;
@@ -583,7 +598,10 @@ export default function SendMoney() {
             });
 
         const handleReady = () => {
-            if (!cancelled) setCheckoutFlowMounting(false);
+            if (!cancelled) {
+                checkoutFlowReadyRef.current = true;
+                setCheckoutFlowMounting(false);
+            }
         };
 
         void loadCheckoutScript()
@@ -600,15 +618,25 @@ export default function SendMoney() {
                     componentOptions: {
                         card: {
                             displayCardholderName: "bottom",
-                            data: {
-                                cardholderName: "Mohammad Khan",
-                            },
+                            ...(cardholderNameRef.current
+                                ? {
+                                      data: {
+                                          cardholderName: cardholderNameRef.current,
+                                      },
+                                  }
+                                : {}),
                         },
                         stored_card: {
                             captureCardCvv: true,
                         },
                     },
                     onReady: handleReady,
+                    onSubmit: () => {
+                        if (!cancelled) {
+                            checkoutFlowReadyRef.current = true;
+                            setCheckoutFlowError(null);
+                        }
+                    },
                     onPaymentCompleted: (
                         _component: unknown,
                         paymentResponse: {
@@ -666,7 +694,8 @@ export default function SendMoney() {
                             typeof errObj === "string"
                                 ? errObj
                                 : String(errObj?.code || errObj?.errorCode || "");
-                        if (code.toLowerCase() === "component_invalid") {
+                        const lowerCode = code.toLowerCase();
+                        if (lowerCode === "component_invalid") {
                             // Form inputs (such as CVV) are incomplete/invalid; allow inline validation inside Flow
                             return;
                         }
@@ -674,10 +703,33 @@ export default function SendMoney() {
                             typeof errObj === "string"
                                 ? errObj
                                 : String(errObj?.details?.reason || errObj?.message || "").trim();
+                        const lowerMsg = msg.toLowerCase();
+                        const isMountOrInitError =
+                            !checkoutFlowReadyRef.current ||
+                            lowerCode.includes("invalid_public_key") ||
+                            lowerCode.includes("public_key") ||
+                            lowerCode.includes("not_authorized") ||
+                            lowerCode.includes("unauthorized") ||
+                            lowerCode.includes("network_error") ||
+                            lowerCode.includes("mount_error") ||
+                            lowerCode.includes("mount") ||
+                            lowerCode.includes("init") ||
+                            lowerCode.includes("config") ||
+                            lowerCode.includes("origin") ||
+                            lowerMsg.includes("public key") ||
+                            lowerMsg.includes("not authorized") ||
+                            lowerMsg.includes("origin");
+                        if (isMountOrInitError) {
+                            setCheckoutFlowError(
+                                msg ||
+                                    "Unable to initialise secure card checkout. Please try again or choose another payment method.",
+                            );
+                            return;
+                        }
                         const inferredStatus =
-                            code.toLowerCase().includes("expir") || msg.toLowerCase().includes("expired")
+                            lowerCode.includes("expir") || lowerMsg.includes("expired")
                                 ? "EXPIRED"
-                                : code.toLowerCase().includes("cancel") || msg.toLowerCase().includes("cancel")
+                                : lowerCode.includes("cancel") || lowerMsg.includes("cancel")
                                 ? "CANCELLED"
                                 : "COMPFAILED";
                         applyPaymentOutcomeRef.current({
@@ -725,6 +777,7 @@ export default function SendMoney() {
 
         return () => {
             cancelled = true;
+            checkoutFlowReadyRef.current = false;
             if (flowInstance && typeof flowInstance.unmount === "function") {
                 try {
                     flowInstance.unmount();
@@ -1101,7 +1154,7 @@ export default function SendMoney() {
                 applyPaymentOutcome({
                     rawStatus: oStatus || jStatus,
                     reference: resolvedRef,
-                    methodLabel: "Instant Pay By Bank",
+                    methodLabel: paymentMethod === "card" ? "Credit / Debit Card" : "Instant Pay By Bank",
                     journeyCode,
                 });
             }
@@ -1897,25 +1950,33 @@ export default function SendMoney() {
                     setAffiliateRateId(validated.rateId);
                 }
 
-                const needsHostedKyc =
-                    Boolean(validated?.kycUrl) &&
-                    (validated?.isTransactionAllowed === false ||
-                        validated?.isKycRequired === true ||
-                        validated?.isProfileUpdateRequired === true);
+                const requiresKycOrProfile = Boolean(
+                    validated &&
+                        (validated.isTransactionAllowed === false ||
+                            validated.isKycRequired === true ||
+                            validated.isProfileUpdateRequired === true),
+                );
 
-                let targetKycUrl: string | null = needsHostedKyc ? (validated?.kycUrl ?? null) : null;
+                let targetKycUrl: string | null = requiresKycOrProfile ? (validated?.kycUrl ?? null) : null;
 
-                if (!targetKycUrl && validated && validated.isTransactionAllowed === false) {
+                if (!targetKycUrl && requiresKycOrProfile) {
                     const fallbackJourney = await fetchMitoKycJourney({
                         returnUrl,
                         journeyType: 1,
                     });
                     if (fallbackJourney?.hostedUrl) {
                         targetKycUrl = fallbackJourney.hostedUrl;
-                    } else {
+                    } else if (validated?.isTransactionAllowed === false) {
                         toast({
                             title: "Transaction Not Allowed",
                             description: "You are not allowed to make this transaction!! Please contact admin",
+                            variant: "destructive",
+                        });
+                        return;
+                    } else {
+                        toast({
+                            title: "Your KYC is pending!!",
+                            description: "Unable to open Compliance verification right now. Please try again or contact support.",
                             variant: "destructive",
                         });
                         return;
@@ -5158,12 +5219,30 @@ export default function SendMoney() {
                                                                 setMitoCardPaymentSession(paidTx.mitoPaymentSession);
                                                                 return;
                                                             }
-                                                            if (
-                                                                method.id === "instant_bank" &&
-                                                                paidTx?.mitoPaymentUrl &&
-                                                                paidTx.mitoPaymentUrl.startsWith("http")
-                                                            ) {
-                                                                setMitoPayByBankUrl(paidTx.mitoPaymentUrl);
+                                                            const hostedCardUrl =
+                                                                method.id === "card" && !paidTx?.mitoPaymentSession
+                                                                    ? paidTx?.mitoPaymentUrl && paidTx.mitoPaymentUrl.startsWith("http")
+                                                                        ? paidTx.mitoPaymentUrl
+                                                                        : (paidTx as any)?.mitoHostedUrl &&
+                                                                            String((paidTx as any).mitoHostedUrl).startsWith("http")
+                                                                          ? String((paidTx as any).mitoHostedUrl)
+                                                                          : null
+                                                                    : null;
+                                                            if (hostedCardUrl) {
+                                                                setMitoPayByBankUrl(hostedCardUrl);
+                                                                return;
+                                                            }
+                                                            const instantBankUrl =
+                                                                method.id === "instant_bank"
+                                                                    ? paidTx?.mitoPaymentUrl && paidTx.mitoPaymentUrl.startsWith("http")
+                                                                        ? paidTx.mitoPaymentUrl
+                                                                        : (paidTx as any)?.mitoHostedUrl &&
+                                                                            String((paidTx as any).mitoHostedUrl).startsWith("http")
+                                                                          ? String((paidTx as any).mitoHostedUrl)
+                                                                          : null
+                                                                    : null;
+                                                            if (instantBankUrl) {
+                                                                setMitoPayByBankUrl(instantBankUrl);
                                                                 return;
                                                             }
                                                             applyPaymentOutcome({
@@ -5201,8 +5280,17 @@ export default function SendMoney() {
                                                         <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-2 bg-slate-50/70">
                                                             <div className="min-w-0">
                                                                 <div className="text-sm font-semibold text-slate-900 flex items-center gap-2">
-                                                                    <Landmark className="w-4 h-4 text-primary shrink-0" />
-                                                                    <span>Instant Pay By Bank</span>
+                                                                    {paymentMethod === "card" ? (
+                                                                        <>
+                                                                            <CreditCard className="w-4 h-4 text-primary shrink-0" />
+                                                                            <span>Credit / Debit Card</span>
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <Landmark className="w-4 h-4 text-primary shrink-0" />
+                                                                            <span>Instant Pay By Bank</span>
+                                                                        </>
+                                                                    )}
                                                                 </div>
                                                                 {transactionRef && (
                                                                     <div className="text-[11px] text-slate-500 truncate">
@@ -5227,7 +5315,7 @@ export default function SendMoney() {
                                                                         applyPaymentOutcome({
                                                                             rawStatus: "CANCELLED",
                                                                             reference: transactionRef,
-                                                                            methodLabel: "Instant Pay By Bank",
+                                                                            methodLabel: paymentMethod === "card" ? "Credit / Debit Card" : "Instant Pay By Bank",
                                                                             journeyCode: extractJourneyCodeFromUrl(mitoPayByBankUrl),
                                                                         });
                                                                     }}
@@ -5238,7 +5326,7 @@ export default function SendMoney() {
                                                             </div>
                                                         </div>
                                                         <iframe
-                                                            title="Pay by bank"
+                                                            title={paymentMethod === "card" ? "Card checkout" : "Pay by bank"}
                                                             allow="encrypted-media"
                                                             src={buildMitoEmbeddedPayByBankUrl(mitoPayByBankUrl)}
                                                             className="w-full flex-1 border-0 bg-white"
@@ -5252,7 +5340,7 @@ export default function SendMoney() {
                                                                     applyPaymentOutcome({
                                                                         rawStatus: "CANCELLED",
                                                                         reference: transactionRef,
-                                                                        methodLabel: "Instant Pay By Bank",
+                                                                        methodLabel: paymentMethod === "card" ? "Credit / Debit Card" : "Instant Pay By Bank",
                                                                         journeyCode: extractJourneyCodeFromUrl(mitoPayByBankUrl),
                                                                     });
                                                                 }}
@@ -5264,6 +5352,8 @@ export default function SendMoney() {
                                                                 size="sm"
                                                                 data-testid="button-complete-pay-by-bank"
                                                                 onClick={async () => {
+                                                                    const activeMethodLabel =
+                                                                        paymentMethod === "card" ? "Credit / Debit Card" : "Instant Pay By Bank";
                                                                     const jCode = extractJourneyCodeFromUrl(mitoPayByBankUrl);
                                                                     if (jCode) {
                                                                         const latest = await fetchMitoJourneyStatus(jCode);
@@ -5278,7 +5368,7 @@ export default function SendMoney() {
                                                                                     latest.partnerReferenceNumber ||
                                                                                     latest.reference ||
                                                                                     transactionRef,
-                                                                                methodLabel: "Instant Pay By Bank",
+                                                                                methodLabel: activeMethodLabel,
                                                                                 journeyCode: latest.journeyCode,
                                                                             });
                                                                             return;
@@ -5287,7 +5377,7 @@ export default function SendMoney() {
                                                                     applyPaymentOutcome({
                                                                         rawStatus: "PROCESSING",
                                                                         reference: transactionRef,
-                                                                        methodLabel: "Instant Pay By Bank",
+                                                                        methodLabel: activeMethodLabel,
                                                                         journeyCode: jCode,
                                                                     });
                                                                 }}
