@@ -159,17 +159,25 @@ interface ReferralCodeFieldProps {
 
 /** Prefilled referral code chip, or an optional "Have a referral code?" field (US-3.2). */
 export function ReferralCodeField({ referral, onChange }: ReferralCodeFieldProps) {
-  const [open, setOpen] = useState(false);
-  const [value, setValue] = useState("");
+  const isManualUnverified = Boolean(
+    referral && !referral.channel && !referral.attributionMethod && !referral.offer && !referral.referrerFirstName,
+  );
+  const [open, setOpen] = useState(isManualUnverified);
+  const [value, setValue] = useState(() => (isManualUnverified && referral ? referral.code : ""));
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(false);
+  const [unverifiedFallback, setUnverifiedFallback] = useState(isManualUnverified);
 
-  if (referral) {
+  if (referral && !unverifiedFallback) {
     const offer = referral.offer;
     const hasHook = offer && offer.reward_type !== "REFERRER" && Number(offer.referee_reward) > 0;
     return (
-      <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2" data-testid="referral-code-applied">
-        <Check className="h-[18px] w-[18px] text-teal-700" strokeWidth={2.5} />
+      <div
+        role="status"
+        className="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5"
+        data-testid="referral-code-applied"
+      >
+        <Check className="mt-0.5 h-[18px] w-[18px] shrink-0 text-teal-700" strokeWidth={2.5} />
         <span className="flex-1 text-sm text-slate-800">
           Referral code <strong>{referral.code}</strong>
           {referral.referrerFirstName && <span className="block text-xs text-teal-700">Code applied – invited by {referral.referrerFirstName}</span>}
@@ -180,18 +188,11 @@ export function ReferralCodeField({ referral, onChange }: ReferralCodeFieldProps
             </span>
           )}
         </span>
-        <button
-          type="button"
-          onClick={() => { clearReferral(); onChange(null); setValue(""); }}
-          className="h-9 px-2 text-sm font-semibold text-blue-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
-        >
-          Remove
-        </button>
       </div>
     );
   }
 
-  if (!open) {
+  if (!open && !unverifiedFallback) {
     return (
       <button type="button" onClick={() => setOpen(true)} className="text-sm font-semibold text-blue-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded">
         Have a referral code?
@@ -203,8 +204,20 @@ export function ReferralCodeField({ referral, onChange }: ReferralCodeFieldProps
     const code = value.trim().toUpperCase();
     setValue(code);
     setError("");
-    if (!code) return;
+    if (!code) {
+      if (unverifiedFallback) {
+        clearReferral();
+        onChange(null);
+        setUnverifiedFallback(false);
+      }
+      return;
+    }
     if (!REFERRAL_CODE_RE.test(code)) {
+      if (unverifiedFallback) {
+        clearReferral();
+        onChange(null);
+        setUnverifiedFallback(false);
+      }
       setError("Referral codes are 6–12 letters and numbers.");
       return;
     }
@@ -215,12 +228,18 @@ export function ReferralCodeField({ referral, onChange }: ReferralCodeFieldProps
       if (!res.ok) {
         setError(res.status === 503 ? "We couldn't check this code right now. You can still sign up and we'll check it later." : "We couldn't find this referral code. Check it or leave the field blank.");
         if (res.status === 503) {
+          setUnverifiedFallback(true);
           const ref = { code, savedAt: Date.now() };
           saveReferral(ref);
           onChange(ref);
+        } else if (unverifiedFallback) {
+          clearReferral();
+          onChange(null);
+          setUnverifiedFallback(false);
         }
         return;
       }
+      setUnverifiedFallback(false);
       const ref: StoredReferral = {
         code: body.data?.code ?? code,
         ...(body.data?.ruleId ? { ruleId: Number(body.data.ruleId) } : {}),

@@ -85,7 +85,7 @@ Loading: skeletons; error: "We couldn't load your rewards. Please try again." + 
 
 - `/ref/:code` validates the code, records a visit, stores the code for 30 days, then opens `/sign-in-sign-up?mode=signup`. Invalid → toast "This referral link isn't valid. You can still sign up."; inactive referrer → "This referral link is no longer active. You can still sign up."; signed-in customer → dashboard + toast "Referral links are for new customers only."
 - Above the form: bordered box (rounded-2xl, p-4) "**Olayinka invited you** – get £10.00 bonus credit in 3 steps." and a 3-segment strip (Join = primary, others slate-200) with labels Join / Send £50.00+ in 30 days / Get £10.00.
-- Referral code row: prefilled code chip with check icon, "Remove" text button. Without a link: collapsed text button "Have a referral code?" reveals the optional field (6–12 letters/numbers, uppercased on blur, validated on blur: "Code applied – invited by Olayinka" / "Referral codes are 6–12 letters and numbers." / "We couldn't find this referral code. Check it or leave the field blank.").
+- Referral code row: read-only applied code badge with check icon and no "Remove" action once a valid code is applied *(updated 2026-11-16 per product owner approval — supersedes prior "Remove" text button)*. Without a link: collapsed text button "Have a referral code?" reveals the optional field (6–16 letters/numbers, uppercased on blur, validated on blur: "Code applied – invited by Olayinka" / "Referral codes are 6–12 letters and numbers." / "We couldn't find this referral code. Check it or leave the field blank.").
 
 ## 6. Send Money — bonus step (US-5.2, US-5.3)
 

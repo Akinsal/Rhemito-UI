@@ -20,6 +20,7 @@ vi.mock("../../../../server/index", () => ({ log: () => {} }));
 
 import ReferralLanding from "@/pages/ReferralLanding";
 import { ReferEarnCard } from "@/components/rewards/ReferEarnCard";
+import { ReferralCodeField } from "@/components/rewards/ReferralSignup";
 import { REFERRAL_CODE_RE, clearReferral, loadReferral, saveReferral, type MyReferral, type RewardOffer, buildReferralShareMessage, buildReferralShareTitle } from "@/lib/rewards";
 import { userInitials, welcomeName } from "@/lib/userDisplay";
 
@@ -214,6 +215,58 @@ describe("Capturing the referral code", () => {
     saveReferral({ code: "JOHN2880" });
     clearReferral();
     expect(loadReferral()).toBeNull();
+  });
+
+  rule("REF-21", "An applied referral code on Sign-Up is strictly read-only for the referee (no 'Remove' button), while an unverified 503 manual entry stays editable", {
+    why: "Product rule (approved by Mohammad, 2026-11-16): referees must not be able to remove an applied referral code on Sign-Up, whether pre-populated via a /ref/:code link or validated via manual entry; however, if Mito is temporarily down (503) during manual typing, the input stays editable so a typo cannot permanently lock the field.",
+    fix: "ReferralCodeField in components/rewards/ReferralSignup.tsx renders data-testid='referral-code-applied' (role='status') without any 'Remove' button when referral is verified/link-attributed, and keeps #referral-code editable when unverifiedFallback is active on a 503 response.",
+    where: ["client/src/components/rewards/ReferralSignup.tsx", "client/src/pages/Auth/components/SignUpForm.tsx"],
+  }, async () => {
+    // 1. Pre-populated from /ref/:code link: read-only chip, no Remove button
+    const onChange = vi.fn();
+    const linked = render(
+      React.createElement(ReferralCodeField, {
+        referral: { code: "JOHN5054GBP", referrerFirstName: "John", channel: "WEB", offer: OFFER, savedAt: Date.now() },
+        onChange,
+      }),
+    );
+    const applied = linked.getByTestId("referral-code-applied");
+    expect(applied.getAttribute("role")).toBe("status");
+    expect(applied.textContent).toContain("Referral code JOHN5054GBP");
+    expect(applied.textContent).toContain("Code applied – invited by John");
+    expect(linked.queryByRole("button", { name: /remove/i })).toBeNull();
+    linked.unmount();
+
+    // 2. Manual entry: 503 keeps input editable, then 404 clears fallback, then 200 locks chip with no Remove button
+    function Wrapper() {
+      const [ref, setRef] = React.useState<any>(null);
+      return React.createElement(ReferralCodeField, { referral: ref, onChange: setRef });
+    }
+    const manual = render(React.createElement(Wrapper));
+    fireEvent.click(manual.getByRole("button", { name: "Have a referral code?" }));
+    const input = manual.container.querySelector("#referral-code") as HTMLInputElement;
+    expect(input).toBeTruthy();
+
+    // 503 during manual typing -> stays editable (not locked into referral-code-applied)
+    ctx.stub.on("/api/referral/codes/TYPO1234", { status: 503, body: { error: "DOWN" } });
+    fireEvent.change(input, { target: { value: "typo1234" } });
+    await act(async () => { fireEvent.blur(input); });
+    await waitFor(() => expect(loadReferral()?.code).toBe("TYPO1234"));
+    expect(manual.queryByTestId("referral-code-applied")).toBeNull();
+
+    // Clearing the 503 typo clears storage
+    fireEvent.change(input, { target: { value: "" } });
+    await act(async () => { fireEvent.blur(input); });
+    expect(loadReferral()).toBeNull();
+
+    // Valid code -> locks into read-only referral-code-applied with NO Remove button
+    ctx.stub.on("/api/referral/codes/JOHN2880", { status: 200, body: { code: "JOHN2880", referrer_first_name: "John", offer: OFFER } });
+    fireEvent.change(input, { target: { value: "john2880" } });
+    await act(async () => { fireEvent.blur(input); });
+    await waitFor(() => expect(manual.getByTestId("referral-code-applied")).toBeTruthy());
+    expect(manual.getByTestId("referral-code-applied").textContent).toContain("Referral code JOHN2880");
+    expect(manual.queryByRole("button", { name: /remove/i })).toBeNull();
+    manual.unmount();
   });
 });
 

@@ -223,7 +223,7 @@ Rendered above the sign-up form fields.
 **With a stored referral and an offer:**
 - Bordered box: `**<Name> invited you** – get <referee_reward> bonus credit in 3 steps.` For REFERRER-only offers: `**<Name> invited you** to Rhemito.` (no amount, no strip).
 - 3-segment strip: `Join` (filled primary) · `Send <floor>+ in <QW> days` · `Get <referee_reward>`.
-- Code row: chip with check icon `<CODE>` + text button `Remove`. Remove clears the stored code and shows the manual field (collapsed state).
+- Code row: read-only chip with check icon `<CODE>` (no `Remove` action — referees cannot remove an applied referral code; *updated 2026-11-16 per product owner approval, superseding prior `Remove` button*).
 
 **Without a stored referral:** text button `Have a referral code?` expands an optional field:
 - Label `Referral code (optional)`, max 12, uppercased on blur, validated on blur via RAPI-2.

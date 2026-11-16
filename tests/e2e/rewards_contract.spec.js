@@ -532,6 +532,50 @@ test.describe('Rewards contract — Refer & Earn card', () => {
     });
 
     /**
+     * CONTRACT REF-21: an applied referral code on the Sign-Up form is strictly read-only for the referee —
+     * there is NO "Remove" button whether the code came from a /ref/:code invite link or manual entry.
+     * WHY: product owner rule (2026-11-16) — referees cannot remove an applied referral code.
+     * CODE: client/src/components/rewards/ReferralSignup.tsx, client/src/pages/Auth/components/SignUpForm.tsx.
+     */
+    test('[REF-21] applied referral code on Sign-Up is read-only with no Remove button (link and manual entry)', async ({ page }) => {
+        await page.route('**/api/rewards/codes/**', (route) => route.fulfill(json({ data: { code: 'JOHN2880', referrerFirstName: 'John', offer, signedIn: false } })));
+        await page.route('**/api/rewards/visits', (route) => route.fulfill(json({ data: { counted: true } })));
+
+        // 1. Via /ref/:code invite link
+        await page.goto('/ref/john2880');
+        await expect(page).toHaveURL(/sign-in-sign-up/);
+        await page.getByPlaceholder('e.g. jamescollor@email.com').fill(`referee.lock.${Date.now()}@example.com`);
+        await page.getByRole('button', { name: 'Continue' }).click();
+        await page.getByPlaceholder('000000').fill('123456');
+        await page.getByRole('button', { name: 'Verify Code' }).click();
+
+        const applied = page.getByTestId('referral-code-applied');
+        await expect(applied).toBeVisible();
+        await expect(applied).toContainText('Referral code JOHN2880');
+        await expect(applied).toContainText('Code applied – invited by John');
+        await expect(applied.getByRole('button', { name: /remove/i })).toHaveCount(0);
+        await expect(page.getByRole('button', { name: 'Remove' })).toHaveCount(0);
+
+        // 2. Via manual "Have a referral code?" entry on Sign-Up
+        await page.evaluate(() => localStorage.removeItem('rhemito.referral'));
+        await page.goto('/sign-in-sign-up?mode=signup');
+        await page.getByPlaceholder('e.g. jamescollor@email.com').fill(`referee.manual.${Date.now()}@example.com`);
+        await page.getByRole('button', { name: 'Continue' }).click();
+        await page.getByPlaceholder('000000').fill('123456');
+        await page.getByRole('button', { name: 'Verify Code' }).click();
+
+        await page.getByRole('button', { name: 'Have a referral code?' }).click();
+        const codeInput = page.locator('#referral-code');
+        await codeInput.fill('john2880');
+        await codeInput.blur();
+
+        await expect(applied).toBeVisible();
+        await expect(applied).toContainText('Referral code JOHN2880');
+        await expect(applied.getByRole('button', { name: /remove/i })).toHaveCount(0);
+        await expect(page.getByRole('button', { name: 'Remove' })).toHaveCount(0);
+    });
+
+    /**
      * CONTRACT REF-03: when an existing user opens a referral link on Web, Android, or iOS, the page tells them clearly in a
      * friendly British tone that the offer is for new users only, clears any stored code, and shows the existing-user offers
      * (Refer & Earn, Bonus Schemes, Promo Codes) and how they benefit from each.
