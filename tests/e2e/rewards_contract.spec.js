@@ -786,7 +786,7 @@ test.describe('Rewards contract — Refer & Earn card', () => {
         await expect(page.getByTestId('bonus-history')).not.toContainText('Sarah S.');
         await expect(page.getByTestId('bonus-history')).not.toContainText('Promo code LEGACY5');
 
-        // 4. Switch selector to GBP: legacy null-currency promo attributes to GBP, WaysToEarn & GBP referrals show
+        // 4. Switch selector to GBP: legacy null-currency promo attributes to GBP, GBP referrals show, WaysToEarn stays hidden
         await page.getByTestId('rewards-currency-select').click();
         await page.getByRole('option', { name: 'GBP', exact: true }).click();
         await expect(page.getByTestId('bonus-history')).toContainText('Sarah S.');
@@ -796,7 +796,7 @@ test.describe('Rewards contract — Refer & Earn card', () => {
         await page.getByRole('tab', { name: 'Overview' }).click();
         await expect(page.getByTestId('bonus-totals')).toContainText('£7.00');
         await expect(page.getByTestId('total-saved')).toContainText('£13.00');
-        await expect(page.getByTestId('ways-to-earn')).toContainText('Send 3, get £10');
+        await expect(page.getByTestId('ways-to-earn')).toHaveCount(0);
 
         await page.getByRole('tab', { name: 'My referrals' }).click();
         await expect(page.getByTestId('referral-summary')).toContainText('Joined: 2 · Earned: 1 · Total earned: £5.00');

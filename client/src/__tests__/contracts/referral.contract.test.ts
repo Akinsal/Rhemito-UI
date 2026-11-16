@@ -758,7 +758,7 @@ describe("Refer & Earn card", () => {
 
   rule("REF-23", "The Reward$ currency selector filters Overview, History, and My referrals consistently across currencies without cross-currency leakage, persists across tabs, and links from ReferEarnCard corridor pills", {
     why: "Multi-currency customers must see accurate balances, history, promo savings, and referral progress per selected currency across every tab on Reward$ without legacy null-currency promo rows or other currencies' referrals bleeding across views.",
-    fix: "BonusAndDiscounts.tsx initializes pickedCurrency from ?currency=, aggregates valid ISO currencies into rewards-currency-select, filters referrals + computes per-currency referral-summary, defaults null promo/history currencies to homeCurrency, guards copyLink and WaysToEarn by currency, and preserves currency across tabs; ReferEarnCard.tsx appends &currency=<activeOffer.currency> to View all referrals when a non-primary corridor pill is selected.",
+    fix: "BonusAndDiscounts.tsx initializes pickedCurrency from ?currency=, aggregates valid ISO currencies into rewards-currency-select, filters referrals + computes per-currency referral-summary, defaults null promo/history currencies to homeCurrency, guards copyLink by currency, hides WaysToEarn on Overview (DEC-2026-11-17-HIDE-WAYS-TO-EARN), and preserves currency across tabs; ReferEarnCard.tsx appends &currency=<activeOffer.currency> to View all referrals when a non-primary corridor pill is selected.",
     where: ["client/src/pages/BonusAndDiscounts.tsx", "client/src/components/rewards/ReferEarnCard.tsx"],
     timeout: 15_000,
   }, async () => {
@@ -983,7 +983,7 @@ describe("Refer & Earn card", () => {
       expect(view.getByTestId("bonus-history").textContent).not.toContain("Sarah S.");
       expect(view.getByTestId("bonus-history").textContent).not.toContain("LEGACY5");
 
-      // (c) Switch currency to GBP: legacy null-currency promo attributes to homeCurrency (GBP), GBP WaysToEarn & referrals render
+      // (c) Switch currency to GBP: legacy null-currency promo attributes to homeCurrency (GBP), GBP referrals render, WaysToEarn stays hidden
       await selectCurrency(view, "GBP");
       expect(view.getByTestId("rewards-currency-select").textContent).toContain("GBP");
       expect(view.getByTestId("bonus-history").textContent).toContain("Sarah S.");
@@ -994,7 +994,7 @@ describe("Refer & Earn card", () => {
       await clickTab(view, "Overview");
       expect(view.getByTestId("bonus-totals").textContent).toContain("£7.00");
       expect(view.getByTestId("total-saved").textContent).toContain("£13.00");
-      expect(view.getByTestId("ways-to-earn").textContent).toContain("Send 3, get £10");
+      expect(view.queryByTestId("ways-to-earn")).toBeNull();
 
       await clickTab(view, "My referrals");
       expect(view.getByTestId("referral-summary").textContent).toContain("Joined: 2 · Earned: 1 · Total earned: £5.00");
