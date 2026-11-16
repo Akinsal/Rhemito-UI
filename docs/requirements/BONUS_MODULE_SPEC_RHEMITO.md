@@ -9,6 +9,8 @@
 **Approved visual design:** `docs/design/referral-bonus-spec.md` (sections 3, 4, 6, 7 — bonus card, Bonus & Discounts, Send Money bonus step, notifications). Any new layout (Section 7.4 "Ways to earn") needs the UX approval step in `CLAUDE.md` first.
 
 > **v1.1 change — one balance, trackable by source.** The customer has **one bonus credit balance** per currency. Referral rewards, bonus-offer rewards and goodwill credits all go into it and are spent together. Every credit shows **how it was earned** — **Referrals**, **Bonus offers** or **From Rhemito** — and the customer can see a breakdown and filter by it. This module owns that balance on Rhemito: the dashboard pill, the Bonus & Discounts balance views and the single "Use your bonus" step on Send Money. The referral module only shows referral progress and links here.
+>
+> **2026-11-16 change (`DEC-2026-11-16-REFEREE-SIGNUP-BONUS`, approved by Product Owner Mohammad Mumtaz):** While `SCHEME` and `MANUAL` bonus credits remain floor-free (`D4`), `REFERRAL` credits enforce the referral rule's Floor (`min_transaction_threshold`) and Corridor (`receive_currency`) in `UseBonusCredit.tsx` and `wallet.applyBonus`, enabling a Referee who receives their welcome bonus on sign-up to redeem it (`Pay less` or `Send more`) on their first valid qualifying transfer. On `Dashboard.tsx` (`§7.1`), Option 1 responsive single-line layout (`xl:flex-row`, `whitespace-nowrap`) keeps `Welcome bonus · Invited by <Name>` on one crisp line without wrapping.
 
 ---
 
@@ -74,7 +76,7 @@ Scheme setup and eligibility (Mito). Deciding referral rewards and referral prog
 | D1 | Promo discount applies first (to the fee), then bonus credit (existing order: promo → credit). |
 | D2 | Bonus credit used can never exceed the send amount; Total to pay never below 0. |
 | D3 | **One balance** (decided 08/10/2026). Referral rewards, bonus-offer rewards and goodwill credits are one bonus credit balance per currency, spent together (soonest expiry first, whatever the source). Each credit is tagged with how it was earned so it can be tracked. |
-| D4 | No minimum send amount to use bonus credit. |
+| D4 | ~~No minimum send amount to use bonus credit.~~ *(Updated 2026-11-16, `DEC-2026-11-16-REFEREE-SIGNUP-BONUS`: `SCHEME` and `MANUAL` credits have no minimum send amount; `REFERRAL` credits enforce the referral rule's Floor and Corridor (`receive_currency`) on redemption in `UseBonusCredit.tsx` and `wallet.applyBonus`, and `REFERRAL` vs `SCHEME` credits cannot be combined in a single transaction).* |
 | D5 | Blocked customers see only the fixed message (Section 7.2); never the reason. |
 
 ---
@@ -177,6 +179,7 @@ Query keys `["bonus","summary",currency]`, `["bonus","wallet",currency]`; staleT
 ### 7.1 Dashboard — bonus credit pill (IP-6)
 - Shown when available bonus credit in the customer's currency > 0: `You have <amount> bonus credit. Create a transaction to use it.` — "Create a transaction" links to `/send-money`. Amber suffix ` <amount> expires in <n> days.` when any credit expires within 14 days.
 - Replaces today's text `You have earned £X Referral Bonus Credit` (wrong now that credits have several sources). One pill for the one balance; there is no separate referral pill.
+- **Updated 2026-11-16 (Option 1 Approved):** In `Dashboard.tsx` (`rewards-section-bonus-banners`), the outer container uses `xl:flex-row` and `referral-bonus-earned-pill` uses `whitespace-nowrap` so `Welcome bonus · Invited by <Name>` always renders on a single line without wrapping across two lines on laptop/desktop viewports.
 - Hidden when 0, loading, or the service is down.
 
 ### 7.2 Blocked notice

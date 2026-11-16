@@ -1411,9 +1411,9 @@ export default function Dashboard() {
                     data-testid="rewards-section-bonus-banners"
                     className="rounded-xl border border-[#87c2fc]/70 border-l-4 border-l-teal-500 bg-white p-4 shadow-2xs"
                   >
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
                       {/* Zone A — What you earned & eligibility guardrails */}
-                      <div className="flex-1 min-w-0 space-y-2">
+                      <div className="flex-1 min-w-0 xl:min-w-[340px] space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <div
                             data-testid="dashboard-total-unused-bonus"
@@ -1461,15 +1461,15 @@ export default function Dashboard() {
                             <span
                               data-testid="referral-bonus-earned-pill"
                               className={cn(
-                                "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold",
+                                "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap max-w-full overflow-hidden text-ellipsis",
                                 welcomeCredit
                                   ? "border-teal-200 bg-teal-50 text-teal-800"
                                   : "border-emerald-200 bg-emerald-50 text-emerald-700",
                               )}
                             >
-                              <span>{welcomeCredit ? "Welcome bonus" : "Referral bonus"}</span>
+                              <span className="whitespace-nowrap shrink-0">{welcomeCredit ? "Welcome bonus" : "Referral bonus"}</span>
                               {schemeAvailable > 0 ? (
-                                <span>· {formatMoney(referralAvailable, activeCur)}</span>
+                                <span className="whitespace-nowrap shrink-0">· {formatMoney(referralAvailable, activeCur)}</span>
                               ) : (
                                 <span className="sr-only">
                                   {" "}
@@ -1477,7 +1477,7 @@ export default function Dashboard() {
                                 </span>
                               )}
                               {welcomeCredit && inviterName && (
-                                <span className="font-medium text-teal-700">
+                                <span className="font-medium text-teal-700 truncate">
                                   · Invited by {inviterName}
                                 </span>
                               )}
@@ -1493,7 +1493,7 @@ export default function Dashboard() {
                           {(schemeAvailable > 0 || !hasSourceSplit) && (
                             <span
                               data-testid="bonus-earned-pill"
-                              className="inline-flex items-center gap-1 rounded-full border border-purple-200 bg-purple-50 px-2.5 py-0.5 text-xs font-semibold text-purple-800"
+                              className="inline-flex items-center gap-1 rounded-full border border-purple-200 bg-purple-50 px-2.5 py-0.5 text-xs font-semibold text-purple-800 whitespace-nowrap"
                             >
                               <span>Bonus offer</span>
                               <span className="sr-only"> Bonus credit</span>
@@ -1514,12 +1514,12 @@ export default function Dashboard() {
 
                         {/* Inline Guardrail Pills */}
                         <div className="flex flex-wrap items-center gap-1.5 text-[11px] sm:text-xs">
-                          <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 font-medium text-[#323130]">
+                          <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 font-medium text-[#323130] whitespace-nowrap">
                             {displayFloor > 0
                               ? `Min. transfer ${formatMoney(displayFloor, activeCur)}`
                               : "No min. transfer"}
                           </span>
-                          <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 font-medium text-[#323130]">
+                          <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 font-medium text-[#323130] whitespace-nowrap">
                             {activeCur} →{" "}
                             {resolvedReceiveCurrency
                               ? resolvedReceiveCurrency.toUpperCase()
@@ -1528,7 +1528,7 @@ export default function Dashboard() {
                           {soonestUrgent && urgentDays !== null ? (
                             <span
                               data-testid="bonus-pill-expiring"
-                              className="inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 font-semibold text-amber-800"
+                              className="inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 font-semibold text-amber-800 whitespace-nowrap"
                             >
                               {urgentDays === 0
                                 ? BONUS_COPY.pillExpiringToday(
@@ -1540,12 +1540,12 @@ export default function Dashboard() {
                                   )}
                             </span>
                           ) : soonestAny?.expires_on ? (
-                            <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 font-medium text-[#605e5c]">
+                            <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 font-medium text-[#605e5c] whitespace-nowrap">
                               Expires {formatUkDate(soonestAny.expires_on)}
                             </span>
                           ) : null}
                           {referralAvailable > 0 && schemeAvailable > 0 && (
-                            <span className="text-[11px] text-[#605e5c]">
+                            <span className="text-[11px] text-[#605e5c] whitespace-nowrap">
                               · Soonest-expiring used first
                             </span>
                           )}
@@ -1553,7 +1553,7 @@ export default function Dashboard() {
                       </div>
 
                       {/* Zone B — How to redeem it + 1-click CTAs */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between lg:justify-end gap-3 lg:pl-4 lg:border-l lg:border-slate-100">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between xl:justify-end gap-3 xl:pl-4 xl:border-l xl:border-slate-100">
                         <div
                           data-testid="dashboard-bonus-redemption-modes"
                           className="space-y-1 max-w-md"

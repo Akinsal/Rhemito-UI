@@ -87,7 +87,7 @@ describe("referral journey", () => {
     expect(referralStatusText(referral({}), NOW)).toBe("Joined · 28 days left");
     expect(referralStatusText(referral({ status: "PENDING" }), NOW)).toBe("Transfer in progress");
     expect(referralStatusText(referral({ status: "REWARDED", credited: 5 }), NOW)).toBe("£5.00 earned");
-    expect(referralHelpText(referral({}), NOW)).toBe("Waiting for their first transfer of £50.00 or more · 28 days left");
+    expect(referralHelpText(referral({}), NOW)).toBe("Waiting for their first successful transfer of £50.00 or more · 28 days left");
     expect(referralHelpText(referral({ status: "EXPIRED" }), NOW)).toBe("They didn't send £50.00 or more in time");
   });
 });

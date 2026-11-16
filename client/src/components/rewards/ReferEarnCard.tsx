@@ -437,9 +437,24 @@ export function ReferEarnCard({
             </div>
           )}
           <ol className="flex flex-col gap-3 text-[15px] text-slate-700">
-            <li><strong className="text-slate-900">1.</strong> Share your universal link. Your friend signs up with it and verifies their email.</li>
-            <li><strong className="text-slate-900">2.</strong> They send {formatMoney(offer.floor, offer.currency)} or more within {offer.qualification_window_days} days of joining.</li>
-            <li><strong className="text-slate-900">3.</strong> When that transfer completes, the bonus credit is added. Use it within {offer.bonus_validity_days} days.</li>
+            <li>
+              <strong className="text-slate-900">1.</strong>{" "}
+              {activeOffer.reward_type !== "REFERRER" && activeOffer.referee_reward > 0
+                ? `Share your referral link. When your friend signs up with it and verifies their email, they get ${formatMoney(activeOffer.referee_reward, activeOffer.currency)} bonus credit straight away.`
+                : "Share your referral link. Your friend signs up with it and verifies their email."}
+            </li>
+            <li>
+              <strong className="text-slate-900">2.</strong>{" "}
+              {activeOffer.reward_type !== "REFERRER" && activeOffer.referee_reward > 0
+                ? `They can redeem their bonus on their first qualifying transfer of ${formatMoney(activeOffer.floor, activeOffer.currency)} or more${activeOffer.receive_currency ? ` to ${activeOffer.receive_currency}` : ""} within ${activeOffer.qualification_window_days} days.`
+                : `They send ${formatMoney(activeOffer.floor, activeOffer.currency)} or more${activeOffer.receive_currency ? ` to ${activeOffer.receive_currency}` : ""} within ${activeOffer.qualification_window_days} days of joining.`}
+            </li>
+            <li>
+              <strong className="text-slate-900">3.</strong>{" "}
+              {activeOffer.reward_type !== "REFEREE" && activeOffer.referrer_reward > 0
+                ? `When that first successful transfer completes, ${formatMoney(activeOffer.referrer_reward, activeOffer.currency)} bonus credit is added to your balance (valid for ${activeOffer.bonus_validity_days} days).`
+                : `Unused welcome bonus credit remains valid for ${activeOffer.bonus_validity_days} days from sign-up.`}
+            </li>
           </ol>
           <p className="text-sm text-slate-500">Each friend can be rewarded once. Self-referrals and duplicate accounts are not rewarded.</p>
         </DialogContent>

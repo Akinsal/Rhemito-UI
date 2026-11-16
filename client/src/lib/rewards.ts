@@ -229,7 +229,7 @@ export function referralHelpText(r: MyReferral, now: Date = new Date()): string 
   switch (r.status) {
     case "REGISTERED": {
       const left = daysUntil(r.qualification_deadline, now);
-      return `Waiting for their first transfer of ${floor} or more${left !== null && left >= 0 ? ` · ${left} day${left === 1 ? "" : "s"} left` : ""}`;
+      return `Waiting for their first successful transfer of ${floor} or more${left !== null && left >= 0 ? ` · ${left} day${left === 1 ? "" : "s"} left` : ""}`;
     }
     case "PENDING": return `Transfer in progress – you get ${formatMoney(r.reward, r.currency)} when it completes`;
     case "REWARDED": return r.credited > 0 ? `You earned ${formatMoney(r.credited, r.currency)} — added to your bonus credit (completed first transfer)` : "Your friend received their welcome bonus (completed first transfer)";
@@ -368,8 +368,8 @@ export function buildReferralShareTitle(options: ReferralShareMessageOptions = {
   if (hasRefereeReward) {
     const reward = formatMoney(Number(offer.referee_reward), currency);
     return sender
-      ? `${sender} invited you to Rhemito — Get ${reward} bonus credit on your first transfer!`
-      : `Join me on Rhemito — Get ${reward} bonus credit on your first transfer!`;
+      ? `${sender} invited you to Rhemito — Get ${reward} bonus credit when you join!`
+      : `Join me on Rhemito — Get ${reward} bonus credit when you join!`;
   }
   return sender ? `${sender} invited you to Rhemito` : "Join me on Rhemito";
 }
@@ -391,9 +391,7 @@ export function buildReferralShareMessage(options: ReferralShareMessageOptions =
 
   const headline =
     hasRefereeReward && reward
-      ? cleanCode
-        ? `Join me on Rhemito with code ${cleanCode}! Get ${reward} on your first ${currency} transfer above ${floor}${corridorTo}.`
-        : `Join me on Rhemito! Get ${reward} on your first ${currency} transfer above ${floor}${corridorTo}.`
+      ? `Join me on Rhemito${cleanCode ? ` with code ${cleanCode}` : ""}! Get ${reward} bonus credit when you sign up — redeem it on your first ${currency} transfer of ${floor}+${corridorTo}.`
       : cleanCode
         ? `Join me on Rhemito with my invite code ${cleanCode} for fast, low-cost international money transfers!`
         : "Join me on Rhemito for fast, low-cost international money transfers!";
@@ -403,7 +401,7 @@ export function buildReferralShareMessage(options: ReferralShareMessageOptions =
     "• Great exchange rates & low, transparent fees across global corridors",
     "• Fast, secure transfers straight to bank accounts, mobile wallets & cash pick-up",
     hasRefereeReward && reward
-      ? `• ${reward} welcome bonus credit unlocked when you send ${floor}+${corridorTo} within ${windowDays} days`
+      ? `• ${reward} welcome bonus credit added automatically when you sign up — redeem on your first ${floor}+${corridorTo} transfer within ${windowDays} days`
       : "• Trusted UK money transfer service with rewards on qualifying transfers",
   ];
 
@@ -412,8 +410,8 @@ export function buildReferralShareMessage(options: ReferralShareMessageOptions =
       ? [
           `How to claim your ${reward} bonus in 3 simple steps:`,
           `1. Register free using my invite link${cleanCode ? ` (code: ${cleanCode})` : ""}`,
-          "2. Verify your account in minutes",
-          `3. Send ${floor} or more${corridorTo} within ${windowDays} days — your ${reward} bonus credit is added automatically!`,
+          `2. Verify your email — your ${reward} bonus credit is added straight away`,
+          `3. Redeem it on your first transfer of ${floor} or more${corridorTo} within ${windowDays} days!`,
         ]
       : [
           "How to get started in 3 simple steps:",
