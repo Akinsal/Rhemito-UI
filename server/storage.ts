@@ -173,6 +173,26 @@ export interface IStorage {
   nextSendMoneySequence(): Promise<number>;
 }
 
+const DEMO_SEND_MONEY_REFERENCES = new Set(["22502784", "22502785", "22502786", "22502787"]);
+
+function currentSendMoneyUtcMonth(now: Date = new Date()): string {
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/**
+ * Strictly monotonic intra-month floor (100 ms ticks elapsed in the current UTC month, min 1)
+ * when NODE_ENV !== "test", so container restarts / redeploys never recycle TXN-YYYYMM-00001.
+ * Returns 0 in NODE_ENV === "test" so deterministic unit and contract suites keep starting at 1.
+ */
+export function monotonicSendMoneyFloor(
+  now: Date = new Date(),
+  nodeEnv: string | undefined = process.env.NODE_ENV,
+): number {
+  if (nodeEnv === "test") return 0;
+  const monthStartUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
+  return Math.max(1, Math.floor((now.getTime() - monthStartUtc) / 100));
+}
+
 export class MemStorage implements IStorage {
   /**
    * Development-only hydration + write-through persistence for login
@@ -190,7 +210,8 @@ export class MemStorage implements IStorage {
     clientEmails: any[] = [],
     moneyRequests: any[] = [],
     payoutAccounts: any[] = [],
-    sequences: { invoice?: number; moneyRequest?: number } = {},
+    sequences: { invoice?: number; moneyRequest?: number; sendMoney?: number } = {},
+    sendMoneyTransactions: any[] = [],
   ): void {
     // Demo seeds are re-created at boot with current credentials — never let a
     // stale dev snapshot resurrect old demo accounts over them.
@@ -244,9 +265,18 @@ export class MemStorage implements IStorage {
       if (!acc?.id || acc.id === "acc_demo_gbp") continue;
       this.payoutAccountsMap.set(acc.id, acc as PayoutAccountRecord);
     }
-    // Numbering continues past everything the snapshot ever issued.
+    for (const tx of sendMoneyTransactions) {
+      if (!tx?.id || String(tx.id).startsWith("demo_txn_") || DEMO_SEND_MONEY_REFERENCES.has(String(tx.reference ?? ""))) continue;
+      this.sendMoneyTransactionsMap.set(tx.id, tx as SendMoneyTransaction);
+    }
+    // Numbering continues past everything the snapshot ever issued (and never below the monotonic intra-month floor).
     this.invoiceSequence = Math.max(this.invoiceSequence, sequences.invoice ?? 0);
     this.moneyRequestSequence = Math.max(this.moneyRequestSequence, sequences.moneyRequest ?? 0);
+    this.sendMoneySequence = Math.max(
+      this.sendMoneySequence,
+      sequences.sendMoney ?? 0,
+      monotonicSendMoneyFloor(),
+    );
   }
 
   private persistDevSnapshot(): void {
@@ -264,7 +294,14 @@ export class MemStorage implements IStorage {
         clientEmails: Array.from(this.clientEmailsMap.values()).map((m) => ({ ...m })) as unknown as Array<Record<string, unknown>>,
         moneyRequests: Array.from(this.moneyRequestsMap.values()).map((r) => ({ ...r })) as unknown as Array<Record<string, unknown>>,
         payoutAccounts: Array.from(this.payoutAccountsMap.values()).map((a) => ({ ...a })) as unknown as Array<Record<string, unknown>>,
-        sequences: { invoice: this.invoiceSequence, moneyRequest: this.moneyRequestSequence },
+        sendMoneyTransactions: Array.from(this.sendMoneyTransactionsMap.values())
+          .filter((t) => !DEMO_SEND_MONEY_REFERENCES.has(t.reference))
+          .map((t) => ({ ...t })) as unknown as Array<Record<string, unknown>>,
+        sequences: {
+          invoice: this.invoiceSequence,
+          moneyRequest: this.moneyRequestSequence,
+          sendMoney: this.sendMoneySequence,
+        },
       }));
     }).catch(() => { /* persistence is best-effort in dev */ });
   }
@@ -302,6 +339,7 @@ export class MemStorage implements IStorage {
   // Send Money transactions
   private sendMoneyTransactionsMap: Map<string, SendMoneyTransaction>;
   private sendMoneySequence: number;
+  private sendMoneySequenceMonth: string;
 
   constructor() {
     this.users = new Map();
@@ -329,7 +367,8 @@ export class MemStorage implements IStorage {
     this.groupPayCampaignsMap = new Map();
     this.groupPayContributionsMap = new Map();
     this.sendMoneyTransactionsMap = new Map();
-    this.sendMoneySequence = 0;
+    this.sendMoneySequence = monotonicSendMoneyFloor();
+    this.sendMoneySequenceMonth = currentSendMoneyUtcMonth();
 
     // Seed Demo User (promo codes live in Mito Admin, not here)
     this.seedDemoUser();
@@ -1414,6 +1453,7 @@ export class MemStorage implements IStorage {
 
   async createSendMoneyTransaction(transaction: SendMoneyTransaction): Promise<SendMoneyTransaction> {
     this.sendMoneyTransactionsMap.set(transaction.id, transaction);
+    this.persistDevSnapshot();
     return transaction;
   }
 
@@ -1439,11 +1479,18 @@ export class MemStorage implements IStorage {
     if (!existing) return undefined;
     const updated = { ...existing, ...patch, id };
     this.sendMoneyTransactionsMap.set(id, updated);
+    this.persistDevSnapshot();
     return updated;
   }
 
   async nextSendMoneySequence(): Promise<number> {
-    this.sendMoneySequence += 1;
+    const ym = currentSendMoneyUtcMonth();
+    if (process.env.NODE_ENV !== "test" && ym !== this.sendMoneySequenceMonth) {
+      this.sendMoneySequenceMonth = ym;
+      this.sendMoneySequence = monotonicSendMoneyFloor();
+    }
+    this.sendMoneySequence = Math.max(this.sendMoneySequence, monotonicSendMoneyFloor()) + 1;
+    this.persistDevSnapshot();
     return this.sendMoneySequence;
   }
 }

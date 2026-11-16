@@ -108,6 +108,7 @@ async function main() {
         snapshot.moneyRequests as never[],
         snapshot.payoutAccounts as never[],
         snapshot.sequences,
+        snapshot.sendMoneyTransactions as never[],
       );
       log(
         `[devPersistence] restored ${snapshot.authUsers.length} user(s), ` +

@@ -166,6 +166,7 @@ export async function resetContractApp(ctx: ContractApp): Promise<void> {
   ctx.promo.promoOutbox.clear();
   ctx.bonus.bonusOutbox.clear();
   ctx.bonusHooks.__resetBonusSync();
+  ctx.rewards.__resetRewardsState();
   (await import("../../../../server/promo/routes")).__resetPromoRateLimit();
 }
 

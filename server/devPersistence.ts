@@ -31,7 +31,8 @@ export interface DevSnapshot {
   clientEmails: Array<Record<string, unknown>>;
   moneyRequests: Array<Record<string, unknown>>;
   payoutAccounts: Array<Record<string, unknown>>;
-  sequences: { invoice: number; moneyRequest: number };
+  sendMoneyTransactions: Array<Record<string, unknown>>;
+  sequences: { invoice: number; moneyRequest: number; sendMoney: number };
 }
 
 /** Date-valued fields per collection (revived on load). */
@@ -52,6 +53,7 @@ const DATE_FIELDS: Record<string, string[]> = {
     "payoutSubmittedAt", "paidOutAt", "cancelledAt", "createdAt",
   ],
   payoutAccounts: ["createdAt", "verifiedAt"],
+  sendMoneyTransactions: ["promoRedeemedAt", "createdAt", "paidAt", "cancelledAt"],
 };
 
 function revive(collection: string, row: Record<string, unknown>): Record<string, unknown> {
@@ -82,9 +84,11 @@ export function loadSnapshot(): DevSnapshot | null {
       clientEmails: (raw.clientEmails ?? []).map((r) => revive("clientEmails", r)),
       moneyRequests: (raw.moneyRequests ?? []).map((r) => revive("moneyRequests", r)),
       payoutAccounts: (raw.payoutAccounts ?? []).map((r) => revive("payoutAccounts", r)),
+      sendMoneyTransactions: (raw.sendMoneyTransactions ?? []).map((r) => revive("sendMoneyTransactions", r)),
       sequences: {
         invoice: Number(raw.sequences?.invoice ?? 0) || 0,
         moneyRequest: Number(raw.sequences?.moneyRequest ?? 0) || 0,
+        sendMoney: Number(raw.sequences?.sendMoney ?? 0) || 0,
       },
     };
   } catch (err) {

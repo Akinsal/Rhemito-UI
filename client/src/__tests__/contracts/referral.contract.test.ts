@@ -395,6 +395,142 @@ describe("Recording the referral", () => {
     await expect(ctx.rewards.onTransferEvent(u.id, tx, "COMPLETED")).resolves.toBeUndefined();
   });
 
+  rule("REF-22", "NEGATIVE (fixed bug): referee transfer events survive Mito cold-starts in strict PAID -> COMPLETED order to award the referrer, and non-test TXN sequences never recycle TXN-YYYYMM-00001 across restarts", {
+    why: "Referrers missed earned rewards when (a) Mito was asleep/503 during a referee's payment because onTransferEvent had no retry, and (b) container restarts reset MemStorage.sendMoneySequence to 0, recycling TXN-YYYYMM-00001 across different referees.",
+    fix: "rewardsService.onTransferEvent queues temporary 5xx/unreachable failures per transfer using referralRetryDelays() so PAID delivers before COMPLETED once Mito wakes up and notifies the referrer; MemStorage initializes sendMoneySequence from monotonicSendMoneyFloor() when NODE_ENV !== 'test', persists sendMoneyTransactions + sequences.sendMoney in devPersistence.ts, and useRewards() sets refetchOnWindowFocus: true.",
+    where: ["server/rewardsService.ts", "server/storage.ts", "server/devPersistence.ts", "client/src/hooks/use-rewards.ts"],
+    timeout: 10_000,
+  }, async () => {
+    process.env.REFERRAL_RETRY_DELAYS_MS = "40,40,40";
+    const referrer = await newUser();
+    const referee = await newUser();
+    const tx = {
+      reference: "TXN-202611-90001",
+      sendAmount: 60,
+      sendCurrency: "GBP",
+      receiveCurrency: "USD",
+      createdAt: new Date("2026-11-16T09:00:00Z"),
+    };
+
+    // 1. Mito drops connection then returns 503 while referee pays; once awake, PAID then COMPLETED arrive in strict order
+    let transferAttempts = 0;
+    const deliveredStatuses: string[] = [];
+    ctx.stub.on("/api/referral/transfer-events", (call) => {
+      transferAttempts += 1;
+      if (transferAttempts === 1) return "drop";
+      if (transferAttempts === 2) return { status: 503, body: { error: "WAKING_UP" } };
+      deliveredStatuses.push(call.body.status);
+      if (call.body.status === "PAID") {
+        return {
+          status: 200,
+          body: {
+            referral: {
+              id: "REF-WAKE1",
+              referrer_id: referrer.id,
+              referee_id: referee.id,
+              status: "PENDING",
+              currency: "GBP",
+              referrer_credited: 0,
+              referee_credited: 10,
+              bonus_validity_days: 90,
+            },
+          },
+        };
+      }
+      return {
+        status: 200,
+        body: {
+          referral: {
+            id: "REF-WAKE1",
+            referrer_id: referrer.id,
+            referee_id: referee.id,
+            status: "REWARDED",
+            currency: "GBP",
+            referrer_credited: 5,
+            referee_credited: 10,
+            bonus_validity_days: 90,
+          },
+        },
+      };
+    });
+
+    await expect(
+      ctx.rewards.onTransferEvent(referee.id, tx, "PAID").then(() => ctx.rewards.onTransferEvent(referee.id, tx, "COMPLETED")),
+    ).resolves.toBeUndefined();
+
+    await waitFor(() => expect(deliveredStatuses).toEqual(["PAID", "COMPLETED"]), { timeout: 3000 });
+    const { getActiveNotifications } = await import("../../../../server/notificationService");
+    await waitFor(async () => {
+      const notes = await getActiveNotifications(referrer.id);
+      expect(notes.some((n) => n.type === "reward_earned" && String(n.body ?? n.title ?? "").includes("£5.00"))).toBe(true);
+    }, { timeout: 2000 });
+
+    // 4xx refusal on transfer-events is permanent (not retried endlessly)
+    ctx.stub.reset();
+    ctx.stub.on("/api/referral/transfer-events", { status: 400, body: { error: "BAD_EVENT" } });
+    await ctx.rewards.onTransferEvent(referee.id, { ...tx, reference: "TXN-BAD-400" }, "COMPLETED");
+    await wait(160);
+    expect(ctx.stub.to("/api/referral/transfer-events")).toHaveLength(1);
+
+    // 2. Non-test MemStorage restarts advance monotonically and never recycle TXN-YYYYMM-00001
+    const { MemStorage, monotonicSendMoneyFloor } = await import("../../../../server/storage");
+    const { formatDocumentNumber } = await import("@shared/invoice-logic");
+
+    // NODE_ENV === "test" stays deterministic starting at 1
+    const testStore = new MemStorage();
+    expect(await testStore.nextSendMoneySequence()).toBe(1);
+
+    const t1 = new Date("2026-11-16T07:20:00.000Z");
+    const t2 = new Date("2026-11-16T08:26:00.000Z");
+    expect(monotonicSendMoneyFloor(t1, "production")).toBeGreaterThan(1);
+    expect(monotonicSendMoneyFloor(t2, "production")).toBeGreaterThan(monotonicSendMoneyFloor(t1, "production"));
+
+    const prevEnv = process.env.NODE_ENV;
+    try {
+      process.env.NODE_ENV = "production";
+      const boot1 = new MemStorage();
+      const seq1 = await boot1.nextSendMoneySequence();
+      expect(seq1).toBeGreaterThan(1);
+      expect(formatDocumentNumber("TXN", seq1, "2026-11")).not.toBe("TXN-202611-00001");
+
+      await wait(130);
+      const boot2 = new MemStorage();
+      const seq2 = await boot2.nextSendMoneySequence();
+      expect(seq2).toBeGreaterThan(seq1);
+
+      boot2.hydrateForDev([], [], [], [], [], [], [], [], [], [], { sendMoney: seq2 + 250 }, [
+        {
+          id: "persisted-txn-1",
+          ownerId: referee.id,
+          reference: formatDocumentNumber("TXN", seq2 + 250, "2026-11"),
+          recipientName: "Jane Roe",
+          service: "bank_deposit",
+          paymentMethod: "card",
+          sendCurrency: "GBP",
+          sendAmountMinor: 5000,
+          receiveCurrency: "USD",
+          receiveAmountMinor: 6300,
+          feeMinor: 100,
+          exchangeRate: "1.26",
+          promoCode: null,
+          status: "completed",
+          createdAt: new Date(),
+          paidAt: new Date(),
+          cancelledAt: null,
+        },
+      ]);
+      expect((await boot2.getSendMoneyTransactionById("persisted-txn-1"))?.reference).toBe(
+        formatDocumentNumber("TXN", seq2 + 250, "2026-11"),
+      );
+      expect(await boot2.nextSendMoneySequence()).toBeGreaterThan(seq2 + 250);
+    } finally {
+      process.env.NODE_ENV = prevEnv;
+    }
+
+    // 3. Referrer tab revalidates rewards on window focus
+    expect(source("client/src/hooks/use-rewards.ts")).toContain("refetchOnWindowFocus: true");
+  });
+
   rule("REF-11", "The referral link is built from Rhemito's own public URL: <publicBaseUrl>/ref/<CODE>, whatever link Mito sends", {
     why: "Links must work in every environment (local, staging, production). Mito does not know Rhemito's address.",
     fix: "server/rewardsRoutes.ts GET /api/rewards/summary overwrites offer.referral_link with `${serverConfig.publicBaseUrl without trailing slash}/ref/${offer.referral_code}`. The Refer card shows it without the http(s):// prefix.",

@@ -192,6 +192,8 @@ async function recordReferral(
   return referral;
 }
 
+const pendingReferralTimers = new Set<NodeJS.Timeout>();
+
 /** Try again later (the engine may be waking up). Gives up after the last delay and says so in the log. */
 function scheduleReferralRetry(
   userId: string,
@@ -206,6 +208,7 @@ function scheduleReferralRetry(
     return;
   }
   const timer = setTimeout(async () => {
+    pendingReferralTimers.delete(timer);
     try {
       await syncCustomer(userId);
       await recordReferral(userId, referralCode, referralRuleId, attributionMeta);
@@ -215,6 +218,7 @@ function scheduleReferralRetry(
     }
   }, delays[attempt]);
   timer.unref?.();
+  pendingReferralTimers.add(timer);
 }
 
 /**
@@ -239,50 +243,175 @@ export async function onCustomerVerified(
   }
 }
 
-/** Report a Send Money transaction status change to the engine (US-4.1, US-4.4). */
-export async function onTransferEvent(
+type TransferEventStatus = "PAID" | "COMPLETED" | "CANCELLED" | "FAILED" | "REFUNDED";
+type TransferEventTx = {
+  reference: string;
+  sendAmount: number;
+  sendCurrency: string;
+  receiveCurrency?: string;
+  createdAt: Date | string;
+};
+
+interface QueuedTransferEvent {
+  userId: string;
+  tx: TransferEventTx;
+  status: TransferEventStatus;
+  nextRetryIndex: number;
+}
+
+interface TransferRetryBucket {
+  queue: QueuedTransferEvent[];
+  timer: NodeJS.Timeout | null;
+  inFlight: boolean;
+}
+
+const pendingTransferRetries = new Map<string, TransferRetryBucket>();
+const inFlightTransferAttempt = new Map<string, Promise<void>>();
+
+async function deliverTransferEvent(
   userId: string,
-  tx: { reference: string; sendAmount: number; sendCurrency: string; receiveCurrency?: string; createdAt: Date | string },
-  status: "PAID" | "COMPLETED" | "CANCELLED" | "FAILED" | "REFUNDED",
+  tx: TransferEventTx,
+  status: TransferEventStatus,
 ): Promise<void> {
+  await syncCustomer(userId);
+  const res = await mito("/api/referral/transfer-events", {
+    method: "POST",
+    body: {
+      transfer_id: tx.reference,
+      customer_id: userId,
+      amount: tx.sendAmount,
+      currency: tx.sendCurrency,
+      // The referral rule can be tied to a corridor (send → receive currency), so the engine needs to know where the money went
+      receive_currency: tx.receiveCurrency,
+      status,
+      created_at: new Date(tx.createdAt).toISOString(),
+    },
+  });
+  const referral = res.referral as Json | null;
+  if (referral?.status === "REWARDED" && !announcedRewards.has(referral.id)) {
+    announcedRewards.add(referral.id);
+    const referee = await storage.getAuthUserById(referral.referee_id);
+    const validUntil = expiryFor(referral);
+    if (referral.referrer_credited > 0) {
+      await notify(referral.referrer_id, "reward_earned", {
+        amount: fmtMoney(referral.referrer_credited, referral.currency),
+        message: `${maskName(referee?.firstName, referee?.lastName)} completed their first transfer.`,
+        expires: validUntil,
+      });
+    }
+    if (referral.referee_credited > 0 && !announcedRefereeRewards.has(referral.id)) {
+      announcedRefereeRewards.add(referral.id);
+      await notify(referral.referee_id, "reward_earned", {
+        amount: fmtMoney(referral.referee_credited, referral.currency),
+        message: "Welcome bonus unlocked!",
+        expires: validUntil,
+      });
+    }
+  }
+}
+
+function scheduleTransferRetryTimer(key: string, delayMs: number): void {
+  const bucket = pendingTransferRetries.get(key);
+  if (!bucket || bucket.timer) return;
+  const timer = setTimeout(() => {
+    void processTransferRetryBucket(key);
+  }, delayMs);
+  timer.unref?.();
+  bucket.timer = timer;
+}
+
+function enqueueFailedTransferEvent(key: string, item: QueuedTransferEvent): void {
+  const delays = referralRetryDelays();
+  if (item.nextRetryIndex >= delays.length) {
+    console.error(`[rewards] giving up recording transfer event ${item.status} for ${key} after ${item.nextRetryIndex} retries`);
+    return;
+  }
+  const delay = delays[item.nextRetryIndex];
+  item.nextRetryIndex += 1;
+  let bucket = pendingTransferRetries.get(key);
+  if (!bucket) {
+    bucket = { queue: [], timer: null, inFlight: false };
+    pendingTransferRetries.set(key, bucket);
+  }
+  bucket.queue.push(item);
+  if (!bucket.timer && !bucket.inFlight) {
+    scheduleTransferRetryTimer(key, delay);
+  }
+}
+
+async function processTransferRetryBucket(key: string): Promise<void> {
+  const bucket = pendingTransferRetries.get(key);
+  if (!bucket) return;
+  bucket.timer = null;
+  bucket.inFlight = true;
   try {
-    await syncCustomer(userId);
-    const res = await mito("/api/referral/transfer-events", {
-      method: "POST",
-      body: {
-        transfer_id: tx.reference,
-        customer_id: userId,
-        amount: tx.sendAmount,
-        currency: tx.sendCurrency,
-        // The referral rule can be tied to a corridor (send → receive currency), so the engine needs to know where the money went
-        receive_currency: tx.receiveCurrency,
-        status,
-        created_at: new Date(tx.createdAt).toISOString(),
-      },
-    });
-    const referral = res.referral as Json | null;
-    if (referral?.status === "REWARDED" && !announcedRewards.has(referral.id)) {
-      announcedRewards.add(referral.id);
-      const referee = await storage.getAuthUserById(referral.referee_id);
-      const validUntil = expiryFor(referral);
-      if (referral.referrer_credited > 0) {
-        await notify(referral.referrer_id, "reward_earned", {
-          amount: fmtMoney(referral.referrer_credited, referral.currency),
-          message: `${maskName(referee?.firstName, referee?.lastName)} completed their first transfer.`,
-          expires: validUntil,
-        });
-      }
-      if (referral.referee_credited > 0 && !announcedRefereeRewards.has(referral.id)) {
-        announcedRefereeRewards.add(referral.id);
-        await notify(referral.referee_id, "reward_earned", {
-          amount: fmtMoney(referral.referee_credited, referral.currency),
-          message: "Welcome bonus unlocked!",
-          expires: validUntil,
-        });
+    while (bucket.queue.length > 0) {
+      if (pendingTransferRetries.get(key) !== bucket) return;
+      const head = bucket.queue[0];
+      try {
+        await deliverTransferEvent(head.userId, head.tx, head.status);
+        if (pendingTransferRetries.get(key) !== bucket) return;
+        bucket.queue.shift();
+      } catch (err) {
+        if (pendingTransferRetries.get(key) !== bucket) return;
+        console.error("[rewards] transfer event retry failed:", err instanceof Error ? err.message : err);
+        if (!isTemporary(err)) {
+          bucket.queue.shift();
+          continue;
+        }
+        const delays = referralRetryDelays();
+        if (head.nextRetryIndex >= delays.length) {
+          console.error(`[rewards] giving up recording transfer event ${head.status} for ${key} after ${head.nextRetryIndex} retries`);
+          bucket.queue.shift();
+          continue;
+        }
+        const delay = delays[head.nextRetryIndex];
+        head.nextRetryIndex += 1;
+        scheduleTransferRetryTimer(key, delay);
+        return;
       }
     }
-  } catch (err) {
-    console.error("[rewards] transfer event not recorded:", err instanceof Error ? err.message : err);
+  } finally {
+    bucket.inFlight = false;
+    if (pendingTransferRetries.get(key) === bucket && bucket.queue.length === 0 && !bucket.timer) {
+      pendingTransferRetries.delete(key);
+    }
+  }
+}
+
+/** Report a Send Money transaction status change to the engine (US-4.1, US-4.4). Retries 5xx/unreachable in per-transfer order. */
+export async function onTransferEvent(
+  userId: string,
+  tx: TransferEventTx,
+  status: TransferEventStatus,
+): Promise<void> {
+  const key = `${userId}:${tx.reference}`;
+  const prev = inFlightTransferAttempt.get(key);
+  const run = (prev ?? Promise.resolve()).then(async () => {
+    const bucket = pendingTransferRetries.get(key);
+    if (bucket && (bucket.queue.length > 0 || bucket.inFlight)) {
+      bucket.queue.push({ userId, tx, status, nextRetryIndex: 0 });
+      if (!bucket.timer && !bucket.inFlight) {
+        scheduleTransferRetryTimer(key, referralRetryDelays()[0] ?? 0);
+      }
+      return;
+    }
+    try {
+      await deliverTransferEvent(userId, tx, status);
+    } catch (err) {
+      console.error("[rewards] transfer event not recorded:", err instanceof Error ? err.message : err);
+      if (isTemporary(err)) {
+        enqueueFailedTransferEvent(key, { userId, tx, status, nextRetryIndex: 0 });
+      }
+    }
+  });
+  inFlightTransferAttempt.set(key, run);
+  try {
+    await run;
+  } finally {
+    if (inFlightTransferAttempt.get(key) === run) {
+      inFlightTransferAttempt.delete(key);
+    }
   }
 }
 
@@ -477,6 +606,16 @@ export function __resetRewardsState(): void {
   announcedRefereeRewards.clear();
   cachedReferralRules.clear();
   lastOfferNotificationId = 0;
+  for (const timer of Array.from(pendingReferralTimers)) {
+    clearTimeout(timer);
+  }
+  pendingReferralTimers.clear();
+  for (const bucket of Array.from(pendingTransferRetries.values())) {
+    if (bucket.timer) clearTimeout(bucket.timer);
+    bucket.queue.length = 0;
+  }
+  pendingTransferRetries.clear();
+  inFlightTransferAttempt.clear();
 }
 
 export { fmtMoney, maskName, ukDate };
