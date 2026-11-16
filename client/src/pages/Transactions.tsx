@@ -41,6 +41,7 @@ import {
   invoiceActionable,
   moneyRequestAwaiting,
   moneyRequestLinkShareable,
+  sendMoneyDateSort,
   type TransactionType,
   type UnifiedTransactionRow,
 } from "@/lib/unifiedTransactions";
@@ -804,7 +805,15 @@ export default function Transactions() {
 
   const mergedRows = useMemo<MergedRow[]>(() => {
     const sendRows: MergedRow[] = [
-      ...(sendMoneyQuery.data ?? []).map(toSendMoneyRow).map((tx) => ({ kind: "send_money" as const, scheduled: false, dateSort: Date.parse(tx.date) || 0, tx })),
+      ...(sendMoneyQuery.data ?? []).map((view) => {
+        const tx = toSendMoneyRow(view);
+        return {
+          kind: "send_money" as const,
+          scheduled: false,
+          dateSort: sendMoneyDateSort(view, tx.date),
+          tx,
+        };
+      }),
       ...(isDemoUser
         ? scheduledTransactions.map((tx) => ({ kind: "send_money" as const, scheduled: true, dateSort: Date.parse(tx.date) || 0, tx }))
         : []),
@@ -814,7 +823,13 @@ export default function Transactions() {
       ...(invoicesQuery.data ?? []).map(fromInvoice),
       ...(campaignsQuery.data ?? []).map(fromCampaign),
     ].map((row) => ({ kind: row.type, dateSort: row.dateSort, row }));
-    return [...sendRows, ...moneyInRows].sort((a, b) => b.dateSort - a.dateSort);
+    return [...sendRows, ...moneyInRows].sort((a, b) => {
+      if (b.dateSort !== a.dateSort) return b.dateSort - a.dateSort;
+      if (a.kind === "send_money" && b.kind === "send_money") {
+        return b.tx.id.localeCompare(a.tx.id);
+      }
+      return 0;
+    });
   }, [sendMoneyQuery.data, requestsQuery.data, invoicesQuery.data, campaignsQuery.data, isDemoUser]);
 
   const searchLower = search.trim().toLowerCase();

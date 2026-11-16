@@ -410,7 +410,17 @@ export function mapAuthUserToMitoCreatePayload(user: AuthUser): MitoRetailUserPa
   const isBusiness = user.accountType === "business";
 
   const dialCode = (user.mobileCode || user.businessPhoneCode || COUNTRY_DEFAULT_DIAL[countryIso3] || "+44").trim();
-  const rawPhone = (user.mobileNumber || user.businessPhoneNumber || "7700900000").replace(/\s+/g, "").replace(/^0+/, "");
+  const fallbackPhoneSeed = `${user.id || ""}:${(user.email || "").trim().toLowerCase()}`;
+  const fallbackPhoneDigits = crypto
+    .createHash("sha256")
+    .update(fallbackPhoneSeed)
+    .digest("hex")
+    .split("")
+    .map((ch) => String(parseInt(ch, 16) % 10))
+    .join("")
+    .slice(0, 8);
+  const defaultLocalPhone = `77${fallbackPhoneDigits.padEnd(8, "0")}`;
+  const rawPhone = (user.mobileNumber || user.businessPhoneNumber || defaultLocalPhone).replace(/\s+/g, "").replace(/^0+/, "");
   const phoneNumber = rawPhone.startsWith("+") ? rawPhone : `${dialCode}${rawPhone}`;
 
   let firstName = (user.firstName || "").trim();
@@ -1900,6 +1910,8 @@ export async function sendMitoTransaction(input: {
   promoCode?: string | null;
   bonusAmount?: number | null;
 }): Promise<{
+  ok?: boolean;
+  httpStatus?: number;
   tnxref?: string;
   status?: string;
   paymentUrl?: string | null;
@@ -1976,6 +1988,7 @@ export async function sendMitoTransaction(input: {
       tnxref?: string;
       status?: string;
       paymentUrl?: string | null;
+      paymentSession?: Record<string, unknown> | string | null;
       linkToken?: string | null;
       paymentReference?: string | null;
       recipientPickupCode?: string | null;
@@ -1994,9 +2007,12 @@ export async function sendMitoTransaction(input: {
         userId: effectiveUserId,
         collectionMode: input.collectionMode,
       });
+      const modeFilteredBens = userBens.filter(
+        (b) => String(b.collectionMode || "BANKACCOUNT").toUpperCase() === input.collectionMode,
+      );
       const matchedBen =
-        userBens.find((b) => b.currency.toUpperCase() === input.receiveCurrency.toUpperCase()) ||
-        userBens[0];
+        modeFilteredBens.find((b) => b.currency.toUpperCase() === input.receiveCurrency.toUpperCase()) ||
+        modeFilteredBens[0];
       if (matchedBen?.beneficiaryId) {
         retryBeneficiaryId = matchedBen.beneficiaryId;
         if (matchedBen.providerId) {
@@ -2018,16 +2034,14 @@ export async function sendMitoTransaction(input: {
     });
 
     if (refreshedRate?.rateId) {
-      const hasDiscountedCommission = Boolean(input.promoCode || (input.bonusAmount && input.bonusAmount > 0));
       currentPayload = buildPayload({
         beneficiaryId: retryBeneficiaryId,
         providerId: retryProviderId,
         rateId: refreshedRate.rateId,
-        commission: hasDiscountedCommission
-          ? input.commission
-          : typeof refreshedRate.commission === "number"
-          ? refreshedRate.commission
-          : input.commission,
+        commission:
+          typeof refreshedRate.commission === "number" && Number.isFinite(refreshedRate.commission)
+            ? refreshedRate.commission
+            : input.commission,
       });
       res = await fetch(`${creds.baseUrl}/api/v1/Transaction/SendMoney`, {
         method: "POST",
@@ -2043,8 +2057,22 @@ export async function sendMitoTransaction(input: {
   }
 
   let parsedPaymentSession: Record<string, unknown> | null = null;
+  const rawPaymentSession = body?.data?.paymentSession;
+  if (rawPaymentSession && typeof rawPaymentSession === "object" && !Array.isArray(rawPaymentSession)) {
+    parsedPaymentSession = rawPaymentSession as Record<string, unknown>;
+  } else if (typeof rawPaymentSession === "string" && rawPaymentSession.trim().startsWith("{")) {
+    try {
+      const parsedObj = JSON.parse(rawPaymentSession) as Record<string, unknown>;
+      if (parsedObj && typeof parsedObj === "object" && !Array.isArray(parsedObj)) {
+        parsedPaymentSession = parsedObj;
+      }
+    } catch {
+      parsedPaymentSession = null;
+    }
+  }
+
   const rawPaymentUrl = body?.data?.paymentUrl ?? null;
-  if (rawPaymentUrl && typeof rawPaymentUrl === "string" && rawPaymentUrl.trim().startsWith("{")) {
+  if (!parsedPaymentSession && rawPaymentUrl && typeof rawPaymentUrl === "string" && rawPaymentUrl.trim().startsWith("{")) {
     try {
       const parsed = JSON.parse(rawPaymentUrl) as Record<string, unknown>;
       if (parsed && typeof parsed === "object" && (parsed.id || parsed.payment_session_secret || parsed.payment_session_token)) {
@@ -2061,6 +2089,8 @@ export async function sendMitoTransaction(input: {
       "mito-retail",
     );
     return {
+      ok: true,
+      httpStatus: res.status,
       tnxref: body.data.tnxref,
       status: body.data.status,
       paymentUrl: rawPaymentUrl,
@@ -2079,6 +2109,8 @@ export async function sendMitoTransaction(input: {
     "mito-retail",
   );
   return {
+    ok: false,
+    httpStatus: res.status,
     checkoutPublicKey: MITO_CHECKOUT_PUBLIC_KEY,
     requestPayload: currentPayload,
     message: body?.message || `HTTP ${res.status}`,

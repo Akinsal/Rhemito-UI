@@ -1070,7 +1070,12 @@ export function registerSendMoneyRoutes(app: Express): void {
         try {
           const authUser = await storage.getAuthUserById(userId);
           if (authUser) {
-            mitoUserId = getMitoUserIdForUser(authUser.id, authUser.email) || (await registerOrSyncMitoRetailUser(authUser));
+            mitoUserId =
+              getMitoUserIdForUser(authUser.id, authUser.email) ||
+              (await registerOrSyncMitoRetailUser(authUser)) ||
+              (DEFAULT_MITO_SENDER_USER_ID || null);
+          } else {
+            mitoUserId = DEFAULT_MITO_SENDER_USER_ID || null;
           }
 
           const sendCurrency = sendCurrencyUpper;
@@ -1271,6 +1276,25 @@ export function registerSendMoneyRoutes(app: Express): void {
         ...(input.otherReason ? { otherReason: input.otherReason } : {}),
         sourceOfFundCode: resolvedSourceOfFundCode,
         paymentNarration: resolvedPaymentNarration,
+        ...(input.beneficiaryType ? { beneficiaryType: input.beneficiaryType } : {}),
+        ...(input.companyName ? { companyName: input.companyName } : {}),
+        ...(input.recipientFirstName ? { recipientFirstName: input.recipientFirstName } : {}),
+        ...(input.recipientLastName ? { recipientLastName: input.recipientLastName } : {}),
+        ...(input.nickName ? { nickName: input.nickName } : {}),
+        ...(input.bankName ? { bankName: input.bankName } : {}),
+        ...(input.accountNumber ? { accountNumber: input.accountNumber } : {}),
+        ...(input.iban ? { iban: input.iban } : {}),
+        ...(input.sortCode ? { sortCode: input.sortCode } : {}),
+        ...(input.swift ? { swift: input.swift } : {}),
+        ...(input.aba ? { aba: input.aba } : {}),
+        ...(input.ifsc ? { ifsc: input.ifsc } : {}),
+        ...(input.bsbCode ? { bsbCode: input.bsbCode } : {}),
+        ...(input.branchCode ? { branchCode: input.branchCode } : {}),
+        ...(input.mobileNo ? { mobileNo: input.mobileNo } : {}),
+        ...(input.address ? { address: input.address } : {}),
+        ...(input.city ? { city: input.city } : {}),
+        ...(input.postcode ? { postcode: input.postcode } : {}),
+        ...(input.stateOrProvince ? { stateOrProvince: input.stateOrProvince } : {}),
         status: "awaiting_payment",
         createdAt: now,
         paidAt: null,
@@ -1443,13 +1467,16 @@ export function registerSendMoneyRoutes(app: Express): void {
     req?: Request,
     promoAtPayment?: promo.PromoAtPayment | null,
     bonusAtPayment?: bonus.BonusAtPayment | null,
-  ): Promise<Partial<SendMoneyTransaction>> {
+  ): Promise<Partial<SendMoneyTransaction> & { _mitoGatewayMessage?: string | null }> {
     if (!isMitoRetailConfigured()) return {};
     try {
       const authUser = await storage.getAuthUserById(userId);
       const mitoUserId =
         tx.mitoUserId ||
-        (authUser ? getMitoUserIdForUser(authUser.id, authUser.email) : null) ||
+        (authUser
+          ? getMitoUserIdForUser(authUser.id, authUser.email) ||
+            (await registerOrSyncMitoRetailUser(authUser))
+          : null) ||
         DEFAULT_MITO_SENDER_USER_ID;
 
       const sendCurrency = tx.sendCurrency.toUpperCase();
@@ -1476,17 +1503,24 @@ export function registerSendMoneyRoutes(app: Express): void {
       }
 
       let mitoBeneficiaryId = tx.mitoBeneficiaryId ?? null;
+      let gatewayFailureMsg: string | null = null;
       if (!mitoBeneficiaryId && mitoUserId) {
         const userBens = await getMitoBeneficiaries({
           userId: mitoUserId,
           collectionMode,
         });
+        const modeFilteredBens = userBens.filter(
+          (b) => String(b.collectionMode || "BANKACCOUNT").toUpperCase() === collectionMode,
+        );
         const matchedBen =
-          userBens.find(
+          modeFilteredBens.find(
             (b) =>
-              b.name.toLowerCase() === tx.recipientName.trim().toLowerCase() ||
+              b.name.toLowerCase() === tx.recipientName.trim().toLowerCase() &&
               b.currency.toUpperCase() === receiveCurrency,
-          ) || userBens[0];
+          ) ||
+          modeFilteredBens.find(
+            (b) => b.currency.toUpperCase() === receiveCurrency,
+          );
         if (matchedBen?.beneficiaryId) {
           mitoBeneficiaryId = matchedBen.beneficiaryId;
           if (!mitoProviderId && matchedBen.providerId) {
@@ -1495,10 +1529,81 @@ export function registerSendMoneyRoutes(app: Express): void {
         }
       }
 
+      if (!mitoBeneficiaryId && mitoUserId && mitoProviderId) {
+        try {
+          const isBusinessBeneficiary = tx.beneficiaryType === "business";
+          const legalEntityType: "I" | "B" = isBusinessBeneficiary ? "B" : "I";
+          const nameParts = tx.recipientName.trim().split(/\s+/);
+          const companyName = isBusinessBeneficiary
+            ? (tx.companyName || tx.recipientName || "Business").trim()
+            : undefined;
+          const firstName = isBusinessBeneficiary
+            ? companyName || "Business"
+            : tx.recipientFirstName || nameParts[0] || "Recipient";
+          const lastName = isBusinessBeneficiary
+            ? "Business"
+            : tx.recipientLastName || nameParts.slice(1).join(" ") || "Beneficiary";
+
+          const createdBen = await createMitoBeneficiary({
+            userId: mitoUserId,
+            serviceCode: "MONEYTRANSFER",
+            collectionMode,
+            legalEntityType,
+            countryIso3: receiveCountryIso3,
+            currencyIso: receiveCurrency,
+            providerId: mitoProviderId,
+            providerCode: mitoProviderCode ?? undefined,
+            companyName,
+            firstName,
+            lastName,
+            acctNumber:
+              collectionMode === "MOBILEMONEY"
+                ? tx.mobileNo || tx.accountNumber || "08012345678"
+                : tx.accountNumber || tx.iban || "0123456789",
+            bankName:
+              tx.bankName ||
+              (collectionMode === "MOBILEMONEY" ? "Mobile Operator" : "Bank"),
+            sortCode: tx.sortCode ?? undefined,
+            iban: tx.iban ?? undefined,
+            bicSwift: tx.swift ?? undefined,
+            aba: tx.aba ?? undefined,
+            ifsc: tx.ifsc ?? undefined,
+            bsbCode: tx.bsbCode ?? undefined,
+            branchCode: tx.branchCode ?? undefined,
+            relationship: tx.relationship || (isBusinessBeneficiary ? "BUSINESS" : "FAMILY"),
+            relationId: tx.relationId ?? undefined,
+            reasonId: tx.reasonId ?? undefined,
+            beneficiaryNickname: tx.nickName ?? undefined,
+            address: tx.address ?? undefined,
+            city: tx.city ?? undefined,
+            postcode: tx.postcode ?? undefined,
+            stateOrProvince: tx.stateOrProvince ?? undefined,
+            mobileNo:
+              tx.mobileNo ||
+              (collectionMode === "MOBILEMONEY" ? tx.accountNumber || "08012345678" : undefined),
+          });
+          if (createdBen?.beneficiaryId) {
+            mitoBeneficiaryId = createdBen.beneficiaryId;
+          }
+        } catch (benErr) {
+          gatewayFailureMsg =
+            benErr instanceof Error && benErr.message
+              ? benErr.message
+              : "We couldn't verify the recipient's payout details with the payment gateway.";
+          console.warn("[sendMoneyRoutes] Step 4 on-demand beneficiary creation warning:", benErr);
+        }
+      } else if (!mitoProviderId) {
+        gatewayFailureMsg =
+          collectionMode === "MOBILEMONEY"
+            ? "Mobile Money payout is not currently available for the selected corridor on Staging."
+            : "No payout provider is currently available for the selected corridor.";
+      }
+
       // Manage Rhemito Promo Code & Referral/Bonus adjustments in our current flow:
-      // - Fee promo reduces the commission charged.
-      // - Fixed-amount promo or Pay-less bonus reduces the net amount collected from the sender.
-      // - Send-more bonus increases the send amount converted for the recipient.
+      // - Plain transfers (!hasRewardOrPromo) keep sendAmountMinor unchanged.
+      // - Send-more bonus increases sendAmountMinor converted for the recipient.
+      // - Pay-less bonus or Promo (fee promo or fixed-amount promo) reduces net sendAmountMinor sent to Mito,
+      //   while ALWAYS aligning commissionNum with lockedRate.commission so furp02-staging accepts rateId.
       const effectiveFeeMinor = promoAtPayment ? promoAtPayment.feeMinor : tx.feeMinor;
       const effectivePromoAppliesTo = promoAtPayment?.promoAppliesTo ?? tx.promoAppliesTo;
       const effectivePromoDiscountMinor = promoAtPayment
@@ -1511,24 +1616,35 @@ export function registerSendMoneyRoutes(app: Express): void {
         ? bonusAtPayment.mode
         : tx.bonusCreditMode ?? null;
 
+      const hasPromoCode = Boolean(promoAtPayment || tx.promoCode || (promoCode && promoCode.trim()));
       const hasRewardOrPromo =
-        Boolean(promoAtPayment || tx.promoCode || effectiveBonusMinor > 0 || (bonusAmount && bonusAmount > 0));
+        Boolean(hasPromoCode || effectiveBonusMinor > 0 || (bonusAmount && bonusAmount > 0));
 
       let sendAmountMinorForMito = tx.sendAmountMinor;
-      let feeMinorForMito = effectiveFeeMinor;
+      const feeMinorForMito = effectiveFeeMinor;
 
-      if (effectiveBonusMode === "send_more" && effectiveBonusMinor > 0) {
-        sendAmountMinorForMito += effectiveBonusMinor;
-      } else {
-        const totalOffsetMinor =
-          (effectivePromoAppliesTo === "amount" ? effectivePromoDiscountMinor : 0) +
-          (effectiveBonusMode === "pay_less" ? effectiveBonusMinor : 0);
-        if (totalOffsetMinor > 0) {
-          const feeReduction = Math.min(feeMinorForMito, totalOffsetMinor);
-          feeMinorForMito -= feeReduction;
-          const remainingReduction = totalOffsetMinor - feeReduction;
-          if (remainingReduction > 0) {
-            sendAmountMinorForMito = Math.max(100, sendAmountMinorForMito - remainingReduction);
+      if (hasRewardOrPromo) {
+        const promoDiscountAppliedMinor = hasPromoCode
+          ? effectivePromoAppliesTo === "amount"
+            ? effectivePromoDiscountMinor
+            : promoAtPayment
+              ? promoAtPayment.promoDiscountMinor
+              : Math.max(
+                  effectivePromoDiscountMinor,
+                  Math.max(0, (tx.feeBeforePromoMinor ?? tx.feeMinor) - effectiveFeeMinor),
+                )
+          : 0;
+
+        if (effectiveBonusMode === "send_more" && effectiveBonusMinor > 0) {
+          sendAmountMinorForMito = Math.max(
+            100,
+            tx.sendAmountMinor + effectiveBonusMinor - promoDiscountAppliedMinor,
+          );
+        } else {
+          const payLessBonusMinor = effectiveBonusMode === "pay_less" ? effectiveBonusMinor : 0;
+          const totalDiscountMinor = promoDiscountAppliedMinor + payLessBonusMinor;
+          if (totalDiscountMinor > 0) {
+            sendAmountMinorForMito = Math.max(100, tx.sendAmountMinor - totalDiscountMinor);
           }
         }
       }
@@ -1555,7 +1671,6 @@ export function registerSendMoneyRoutes(app: Express): void {
           mitoRateId = lockedRate.rateId;
         }
         if (
-          !hasRewardOrPromo &&
           typeof lockedRate?.commission === "number" &&
           Number.isFinite(lockedRate.commission)
         ) {
@@ -1594,6 +1709,14 @@ export function registerSendMoneyRoutes(app: Express): void {
           bonusAmount,
         });
 
+        const rawSentMsg = sent?.message ? String(sent.message).trim() : "";
+        const meaningfulSentMsg =
+          rawSentMsg &&
+          !/^HTTP\s+\d+$/i.test(rawSentMsg) &&
+          rawSentMsg.toLowerCase() !== "unknown"
+            ? rawSentMsg
+            : null;
+
         return {
           mitoUserId,
           mitoProviderId,
@@ -1609,10 +1732,20 @@ export function registerSendMoneyRoutes(app: Express): void {
           ...(sent?.paymentReference !== undefined ? { mitoPaymentReference: sent.paymentReference } : {}),
           ...(sent?.checkoutPublicKey ? { mitoCheckoutPublicKey: sent.checkoutPublicKey } : {}),
           ...(sent?.requestPayload ? { mitoSendMoneyPayload: sent.requestPayload } : {}),
+          ...(sent?.ok === false
+            ? { _mitoGatewayMessage: meaningfulSentMsg || gatewayFailureMsg }
+            : {}),
         };
+      }
+      if (gatewayFailureMsg) {
+        return { _mitoGatewayMessage: gatewayFailureMsg };
       }
     } catch (err) {
       console.warn("[sendMoneyRoutes] Transaction/SendMoney warning:", err);
+      return {
+        _mitoGatewayMessage:
+          err instanceof Error && err.message ? err.message : null,
+      };
     }
     return {};
   }
@@ -1661,17 +1794,80 @@ export function registerSendMoneyRoutes(app: Express): void {
       }
 
       if (isMitoStep4Reclick) {
-        const mitoSendPatch = await sendMitoForSendMoneyTx(
-          tx,
-          userId,
-          parsed.data.paymentMethod,
-          parsed.data.promoCode ?? tx.promoCode,
-          parsed.data.bonusCredit ? Number(parsed.data.bonusCredit.amount) : null,
-          req,
-        );
+        const reclickBonus: bonus.BonusAtPayment | null = parsed.data.bonusCredit
+          ? {
+              mode: parsed.data.bonusCredit.mode,
+              amountMinor: toMinorUnits(parsed.data.bonusCredit.amount, tx.sendCurrency),
+            }
+          : tx.bonusCreditMinor && tx.bonusCreditMode
+            ? { mode: tx.bonusCreditMode, amountMinor: tx.bonusCreditMinor }
+            : null;
+        const reclickPromo: promo.PromoAtPayment | null =
+          parsed.data.promoCode && !tx.promoCode
+            ? {
+                promoCode: parsed.data.promoCode.trim().toUpperCase(),
+                feeBeforePromoMinor: tx.feeBeforePromoMinor ?? tx.feeMinor,
+                feeMinor: Math.max(
+                  0,
+                  (tx.feeBeforePromoMinor ?? tx.feeMinor) -
+                    toMinorUnits(parsed.data.promoDiscount ?? "0", tx.sendCurrency),
+                ),
+                promoDiscountMinor: toMinorUnits(parsed.data.promoDiscount ?? "0", tx.sendCurrency),
+              }
+            : tx.promoCode
+              ? {
+                  promoCode: tx.promoCode,
+                  feeBeforePromoMinor: tx.feeBeforePromoMinor ?? tx.feeMinor,
+                  feeMinor: tx.feeMinor,
+                  promoDiscountMinor:
+                    tx.promoDiscountMinor ??
+                    Math.max(0, (tx.feeBeforePromoMinor ?? tx.feeMinor) - tx.feeMinor),
+                  ...(tx.promoAppliesTo === "amount" ? { promoAppliesTo: "amount" as const } : {}),
+                }
+              : null;
+
+        const { _mitoGatewayMessage: reclickGatewayMsg, ...mitoSendPatch } =
+          await sendMitoForSendMoneyTx(
+            tx,
+            userId,
+            parsed.data.paymentMethod,
+            reclickPromo?.promoCode ?? parsed.data.promoCode ?? tx.promoCode,
+            reclickBonus ? Number(fromMinorUnits(reclickBonus.amountMinor, tx.sendCurrency)) : null,
+            req,
+            reclickPromo,
+            reclickBonus,
+          );
+
+        if (
+          parsed.data.paymentMethod === "card" ||
+          parsed.data.paymentMethod === "instant_bank"
+        ) {
+          const hasReclickTarget =
+            parsed.data.paymentMethod === "card"
+              ? Boolean(
+                  mitoSendPatch.mitoPaymentSession ||
+                    (mitoSendPatch.mitoPaymentUrl &&
+                      mitoSendPatch.mitoPaymentUrl.startsWith("http")),
+                )
+              : Boolean(
+                  (mitoSendPatch.mitoPaymentUrl &&
+                    mitoSendPatch.mitoPaymentUrl.startsWith("http")) ||
+                    (tx.mitoHostedUrl && tx.mitoHostedUrl.startsWith("http")),
+                );
+          if (!hasReclickTarget) {
+            throw new SendMoneyError(
+              502,
+              "PAYMENT_GATEWAY_ERROR",
+              reclickGatewayMsg ||
+                "We couldn't open the payment gateway right now. Please try again or choose another payment method.",
+            );
+          }
+        }
+
         const reUpdated =
           (await storage.updateSendMoneyTransaction(tx.id, {
             ...mitoSendPatch,
+            ...(parsed.data.paymentMethod === "instant_bank" ? { mitoPaymentSession: null } : {}),
             paymentMethod: parsed.data.paymentMethod,
           })) ?? tx;
         return res.json({ data: toView(reUpdated) });
@@ -1711,20 +1907,47 @@ export function registerSendMoneyRoutes(app: Express): void {
       }
 
       // Submit Transaction in Mito Retail Sandbox on Step 4 Payment (POST /api/v1/Transaction/SendMoney)
-      const mitoSendPatch = await sendMitoForSendMoneyTx(
-        effectiveTx,
-        userId,
-        parsed.data.paymentMethod,
-        promoAtPayment?.promoCode ?? effectiveTx.promoCode,
-        bonusAtPayment ? Number(fromMinorUnits(bonusAtPayment.amountMinor, tx.sendCurrency)) : null,
-        req,
-        promoAtPayment,
-        bonusAtPayment,
-      );
+      const { _mitoGatewayMessage: mitoGatewayMessage, ...mitoSendPatch } =
+        await sendMitoForSendMoneyTx(
+          effectiveTx,
+          userId,
+          parsed.data.paymentMethod,
+          promoAtPayment?.promoCode ?? effectiveTx.promoCode,
+          bonusAtPayment ? Number(fromMinorUnits(bonusAtPayment.amountMinor, tx.sendCurrency)) : null,
+          req,
+          promoAtPayment,
+          bonusAtPayment,
+        );
       const mitoPatch = {
         ...(tx.mitoTransactionId ? {} : await initiateHostedForSendMoneyTx(effectiveTx, userId, req)),
         ...mitoSendPatch,
       };
+
+      if (
+        isMitoRetailConfigured() &&
+        (parsed.data.paymentMethod === "card" || parsed.data.paymentMethod === "instant_bank")
+      ) {
+        const hasValidGatewayTarget =
+          parsed.data.paymentMethod === "card"
+            ? Boolean(
+                mitoPatch.mitoPaymentSession ||
+                  (mitoPatch.mitoPaymentUrl && mitoPatch.mitoPaymentUrl.startsWith("http")),
+              )
+            : Boolean(
+                (mitoPatch.mitoPaymentUrl && mitoPatch.mitoPaymentUrl.startsWith("http")) ||
+                  (mitoPatch.mitoHostedUrl && mitoPatch.mitoHostedUrl.startsWith("http")),
+              );
+        if (!hasValidGatewayTarget) {
+          if (promoAtPayment) await promo.releaseForPayment(tx.reference);
+          if (bonusAtPayment) await bonus.releaseForPayment(userId, tx.reference);
+          throw new SendMoneyError(
+            502,
+            "PAYMENT_GATEWAY_ERROR",
+            mitoGatewayMessage ||
+              "We couldn't open the payment gateway right now. Please try again or choose another payment method.",
+          );
+        }
+      }
 
       const status = statusForPaymentMethod(parsed.data.paymentMethod);
       const now = new Date();
