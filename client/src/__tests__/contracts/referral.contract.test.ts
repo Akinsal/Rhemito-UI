@@ -18,6 +18,11 @@ vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast }), toast }));
 // server/auth.ts imports `log` from server/index.ts, which would boot the whole app on import
 vi.mock("../../../../server/index", () => ({ log: () => {} }));
 
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { NotificationContextProvider } from "@/contexts/NotificationContext";
+import { ContactsProvider } from "@/contexts/ContactsContext";
+import BonusAndDiscounts from "@/pages/BonusAndDiscounts";
 import ReferralLanding from "@/pages/ReferralLanding";
 import { ReferEarnCard } from "@/components/rewards/ReferEarnCard";
 import { ReferralCodeField } from "@/components/rewards/ReferralSignup";
@@ -749,6 +754,284 @@ describe("Refer & Earn card", () => {
       expect.objectContaining({ friend: "Sarah S.", status: "REWARDED", credited: 15 }),
     ]));
     expect(summaryRes.body.data.referrals.summary.joined).toBe(1);
+  });
+
+  rule("REF-23", "The Reward$ currency selector filters Overview, History, and My referrals consistently across currencies without cross-currency leakage, persists across tabs, and links from ReferEarnCard corridor pills", {
+    why: "Multi-currency customers must see accurate balances, history, promo savings, and referral progress per selected currency across every tab on Reward$ without legacy null-currency promo rows or other currencies' referrals bleeding across views.",
+    fix: "BonusAndDiscounts.tsx initializes pickedCurrency from ?currency=, aggregates valid ISO currencies into rewards-currency-select, filters referrals + computes per-currency referral-summary, defaults null promo/history currencies to homeCurrency, guards copyLink and WaysToEarn by currency, and preserves currency across tabs; ReferEarnCard.tsx appends &currency=<activeOffer.currency> to View all referrals when a non-primary corridor pill is selected.",
+    where: ["client/src/pages/BonusAndDiscounts.tsx", "client/src/components/rewards/ReferEarnCard.tsx"],
+    timeout: 15_000,
+  }, async () => {
+    if (!window.matchMedia) {
+      window.matchMedia = (query: string): MediaQueryList => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      });
+    }
+    if (typeof (globalThis as Record<string, unknown>).ResizeObserver === "undefined") {
+      (globalThis as Record<string, unknown>).ResizeObserver = class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      };
+    }
+    if (!HTMLElement.prototype.hasPointerCapture) {
+      HTMLElement.prototype.hasPointerCapture = () => false;
+    }
+    if (!HTMLElement.prototype.setPointerCapture) {
+      HTMLElement.prototype.setPointerCapture = () => {};
+    }
+    if (!HTMLElement.prototype.releasePointerCapture) {
+      HTMLElement.prototype.releasePointerCapture = () => {};
+    }
+    if (!HTMLElement.prototype.scrollIntoView) {
+      HTMLElement.prototype.scrollIntoView = () => {};
+    }
+
+    const gbpOffer: RewardOffer = {
+      ...OFFER,
+      rule_id: 1,
+      currency: "GBP",
+      referral_code: "JOHN2880GBP",
+      referral_link: "http://localhost:5000/ref/JOHN2880GBP",
+    };
+    const usdOffer: RewardOffer = {
+      ...OFFER,
+      rule_id: 2,
+      currency: "USD",
+      referrer_reward: 10,
+      referee_reward: 20,
+      floor: 100,
+      text: "Invite friends with your link. You get $10.00 and your friend gets $20.00 in bonus credit when they send $100.00 or more within 30 days of joining.",
+      referral_code: "JOHN2880USD",
+      referral_link: "http://localhost:5000/ref/JOHN2880USD",
+    };
+
+    // 1. ReferEarnCard "View all referrals" deep-links to ?tab=referrals&currency=USD when USD corridor pill is selected
+    const cardView = card({ offer: gbpOffer, offers: [gbpOffer, usdOffer], sendCurrencies: ["GBP", "USD", "EUR"] });
+    expect(cardView.getByRole("link", { name: /View all referrals/ }).getAttribute("href")).toBe("/bonus-discounts?tab=referrals");
+    await act(async () => { fireEvent.click(cardView.getByRole("button", { name: "USD → ALL" })); });
+    expect(cardView.getByRole("link", { name: /View all referrals/ }).getAttribute("href")).toBe("/bonus-discounts?tab=referrals&currency=USD");
+    cardView.unmount();
+
+    // 2. BonusAndDiscounts pre-selects USD from ?currency=USD and filters all 3 tabs across USD, GBP, and EUR
+    const multiSummary = {
+      customer: { id: "user_123", referralCode: "JOHN2880", currency: "GBP" },
+      currency: "GBP",
+      sendCurrencies: ["GBP", "USD", "EUR"],
+      offer: gbpOffer,
+      offers: [gbpOffer, usdOffer],
+      wallet: {
+        bonus_blocked: false,
+        balances: [
+          {
+            currency: "GBP",
+            available: 7,
+            earned: 15,
+            used: 8,
+            expired: 0,
+            used_transfer_count: 1,
+            referral_credit_count: 1,
+            other_credit_count: 0,
+            by_source: [{ credit_source: "REFERRAL", label: "Referrals", earned: 15, used: 8, expired: 0, removed: 0, available: 7 }],
+          },
+          {
+            currency: "USD",
+            available: 10,
+            earned: 10,
+            used: 0,
+            expired: 0,
+            used_transfer_count: 0,
+            referral_credit_count: 1,
+            other_credit_count: 0,
+            by_source: [{ credit_source: "REFERRAL", label: "Referrals", earned: 10, used: 0, expired: 0, removed: 0, available: 10 }],
+          },
+        ],
+        unused: [
+          { id: "u_gbp", source: "Referrer reward – referred Sarah S.", credit_source: "REFERRAL", credit_source_label: "Referral bonus – Sarah S.", reason_code: "REFERRAL_REWARD", amount: 15, remaining: 7, currency: "GBP", earned_on: "2026-10-01", expires_on: "2027-01-01", status: "PARTLY_USED" },
+          { id: "u_usd", source: "Referrer reward – referred Alex M.", credit_source: "REFERRAL", credit_source_label: "Referral bonus – Alex M.", reason_code: "REFERRAL_REWARD", amount: 10, remaining: 10, currency: "USD", earned_on: "2026-10-05", expires_on: "2027-01-05", status: "UNUSED" },
+        ],
+        credits: [
+          { id: "u_gbp", amount: 15, remaining: 7, currency: "GBP", status: "PARTLY_USED", expires_on: "2027-01-01", notes: "", reason_code: "REFERRAL_REWARD", created_at: "2026-10-01" },
+          { id: "u_usd", amount: 10, remaining: 10, currency: "USD", status: "UNUSED", expires_on: "2027-01-05", notes: "", reason_code: "REFERRAL_REWARD", created_at: "2026-10-05" },
+        ],
+        history: [
+          { id: "u_gbp", created_at: "2026-10-01T10:00:00Z", type: "EARNED", reason_code: "REFERRAL_REWARD", amount: 15, currency: "GBP", notes: "Referrer reward – referred Sarah S.", transfer_id: null, source_credit_id: null, credit_source: "REFERRAL", credit_source_label: "Referral bonus – Sarah S." },
+          { id: "u_usd", created_at: "2026-10-05T10:00:00Z", type: "EARNED", reason_code: "REFERRAL_REWARD", amount: 10, currency: "USD", notes: "Referrer reward – referred Alex M.", transfer_id: null, source_credit_id: null, credit_source: "REFERRAL", credit_source_label: "Referral bonus – Alex M." },
+        ],
+        promo_redemptions: [
+          { id: "p_legacy_null", code: "LEGACY5", amount: -5, currency: null, transfer_id: "TXN-LEG", created_at: "2026-10-02T10:00:00Z" },
+          { id: "p_usd_4", code: "USDSAVE4", amount: -4, currency: "USD", transfer_id: "TXN-USD", created_at: "2026-10-06T10:00:00Z" },
+        ],
+      },
+      referrals: {
+        data: [
+          { id: "R_GBP_1", friend: "Sarah S.", joined_on: "2026-09-20T10:00:00Z", status: "REWARDED", status_label: "Earned", currency: "GBP", floor: 50, qualification_deadline: "2027-01-01", reward: 5, credited: 5 },
+          { id: "R_GBP_2", friend: "Musa I.", joined_on: "2026-09-25T10:00:00Z", status: "REGISTERED", status_label: "Joined", currency: "GBP", floor: 50, qualification_deadline: "2027-01-05", reward: 5, credited: 0 },
+          { id: "R_USD_1", friend: "Alex M.", joined_on: "2026-10-04T10:00:00Z", status: "REWARDED", status_label: "Earned", currency: "USD", floor: 100, qualification_deadline: "2027-01-10", reward: 10, credited: 10 },
+        ],
+        summary: { joined: 3, earned_count: 2, total_earned: { GBP: 5, USD: 10 } },
+      },
+      latestOffer: null,
+    };
+
+    const prevFetch = globalThis.fetch;
+    window.history.replaceState({}, "", "/bonus-discounts?tab=referrals&currency=USD");
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+    qc.setQueryData(["/api/rewards/summary"], multiSummary);
+    qc.setQueryData(["/api/auth/me"], {
+      user: { id: "user_123", email: "john@example.com", accountType: "individual", country: "GB", firstName: "John", lastName: "Doe", status: "active" },
+    });
+
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      const jsonResp = (payload: unknown) =>
+        new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json" } });
+      if (url.includes("/api/rewards/summary")) return jsonResp({ data: multiSummary });
+      if (url.includes("/api/promocodes/savings")) {
+        return jsonResp({
+          data: {
+            items: [
+              { id: "p_legacy_null", code: "LEGACY5", amount: 5, currency: null, transferId: "TXN-LEG", createdAt: "2026-10-02T10:00:00Z" },
+              { id: "p_usd_4", code: "USDSAVE4", amount: 4, currency: "USD", transferId: "TXN-USD", createdAt: "2026-10-06T10:00:00Z" },
+            ],
+            saved: { GBP: 5, USD: 4 },
+          },
+        });
+      }
+      if (url.includes("/api/bonus/summary")) {
+        return jsonResp({
+          data: {
+            currency: "GBP",
+            currencies: ["GBP", "USD", "EUR"],
+            blocked: false,
+            offers: [{ id: 1, name: "Send 3, get £10", type: "LOYALTY", currency: "GBP", summary: "Complete 3 transfers and get £10.00." }],
+            wallet: multiSummary.wallet,
+          },
+        });
+      }
+      if (url.includes("/api/auth/me")) {
+        return jsonResp({
+          user: { id: "user_123", email: "john@example.com", accountType: "individual", country: "GB", firstName: "John", lastName: "Doe", status: "active" },
+        });
+      }
+      return jsonResp({ data: [] });
+    }) as typeof fetch;
+
+    const clickTab = async (view: ReturnType<typeof render>, name: string) => {
+      const tabBtn = view.getByRole("tab", { name });
+      await act(async () => {
+        fireEvent.mouseDown(tabBtn, { button: 0, ctrlKey: false });
+        fireEvent.click(tabBtn);
+      });
+    };
+
+    const selectCurrency = async (view: ReturnType<typeof render>, code: string) => {
+      const trigger = view.getByTestId("rewards-currency-select");
+      await act(async () => {
+        fireEvent.keyDown(trigger, { key: "ArrowDown" });
+      });
+      const option = await waitFor(() => view.getByRole("option", { name: code }));
+      await act(async () => {
+        fireEvent.click(option);
+      });
+    };
+
+    const view = render(
+      React.createElement(
+        QueryClientProvider,
+        { client: qc },
+        React.createElement(
+          NotificationContextProvider,
+          null,
+          React.createElement(
+            ContactsProvider,
+            null,
+            React.createElement(TooltipProvider, null, React.createElement(BonusAndDiscounts)),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      // (a) Initialized to My referrals + USD via ?tab=referrals&currency=USD
+      await waitFor(() => expect(view.getByTestId("rewards-currency-select").textContent).toContain("USD"));
+      expect(view.getByTestId("referral-summary").textContent).toContain("Joined: 1 · Earned: 1 · Total earned: $10.00");
+      expect(view.getByTestId("referral-card-R_USD_1").textContent).toContain("Alex M.");
+      expect(view.queryByTestId("referral-card-R_GBP_1")).toBeNull();
+      expect(view.queryByTestId("referral-card-R_GBP_2")).toBeNull();
+
+      // (b) Switch My referrals -> Overview -> History: USD persists, legacy null-currency promo does NOT leak into USD
+      await clickTab(view, "Overview");
+      expect(view.getByTestId("rewards-currency-select").textContent).toContain("USD");
+      expect(view.getByTestId("bonus-totals").textContent).toContain("$10.00");
+      await waitFor(() => expect(view.getByTestId("total-saved").textContent).toContain("$4.00"));
+      expect(view.getByTestId("unused-bonus").textContent).toContain("Alex M.");
+      expect(view.getByTestId("unused-bonus").textContent).not.toContain("Sarah S.");
+      expect(view.queryByTestId("ways-to-earn")).toBeNull();
+
+      await clickTab(view, "History");
+      expect(view.getByTestId("rewards-currency-select").textContent).toContain("USD");
+      await waitFor(() => expect(view.getByTestId("bonus-history").textContent).toContain("USDSAVE4"));
+      expect(view.getByTestId("bonus-history").textContent).toContain("Alex M.");
+      expect(view.getByTestId("bonus-history").textContent).not.toContain("Sarah S.");
+      expect(view.getByTestId("bonus-history").textContent).not.toContain("LEGACY5");
+
+      // (c) Switch currency to GBP: legacy null-currency promo attributes to homeCurrency (GBP), GBP WaysToEarn & referrals render
+      await selectCurrency(view, "GBP");
+      expect(view.getByTestId("rewards-currency-select").textContent).toContain("GBP");
+      expect(view.getByTestId("bonus-history").textContent).toContain("Sarah S.");
+      expect(view.getByTestId("bonus-history").textContent).toContain("LEGACY5");
+      expect(view.getByTestId("bonus-history").textContent).not.toContain("Alex M.");
+      expect(view.getByTestId("bonus-history").textContent).not.toContain("USDSAVE4");
+
+      await clickTab(view, "Overview");
+      expect(view.getByTestId("bonus-totals").textContent).toContain("£7.00");
+      expect(view.getByTestId("total-saved").textContent).toContain("£13.00");
+      expect(view.getByTestId("ways-to-earn").textContent).toContain("Send 3, get £10");
+
+      await clickTab(view, "My referrals");
+      expect(view.getByTestId("referral-summary").textContent).toContain("Joined: 2 · Earned: 1 · Total earned: £5.00");
+      expect(view.getByTestId("referral-card-R_GBP_1").textContent).toContain("Sarah S.");
+      expect(view.getByTestId("referral-card-R_GBP_2").textContent).toContain("Musa I.");
+      expect(view.queryByTestId("referral-card-R_USD_1")).toBeNull();
+
+      // (d) Switch currency to EUR (0 referrals, no EUR offer): empty state on My referrals, no fallback to GBP link, €0.00 on Overview, empty History
+      toast.mockClear();
+      await selectCurrency(view, "EUR");
+      expect(view.getByTestId("rewards-currency-select").textContent).toContain("EUR");
+      expect(view.queryByTestId("referral-summary")).toBeNull();
+      expect(view.getByText("No referrals yet. Share your link to start earning.")).toBeTruthy();
+
+      await act(async () => {
+        fireEvent.click(view.getByRole("button", { name: /Copy referral link/i }));
+      });
+      expect(toast).toHaveBeenCalledWith({
+        title: "No referral offer right now",
+        description: "There is no Refer & Earn offer for EUR at the moment.",
+      });
+
+      await clickTab(view, "Overview");
+      expect(view.getByTestId("rewards-currency-select").textContent).toContain("EUR");
+      expect(view.getByTestId("bonus-totals").textContent).toContain("€0.00");
+      expect(view.getByTestId("total-saved").textContent).toContain("€0.00");
+
+      await clickTab(view, "History");
+      expect(view.getByTestId("rewards-currency-select").textContent).toContain("EUR");
+      expect(view.queryByTestId("bonus-history")).toBeNull();
+      expect(view.getByText("No rewards yet. Invite friends or use a promo code to start saving.")).toBeTruthy();
+    } finally {
+      view.unmount();
+      qc.clear();
+      globalThis.fetch = prevFetch;
+      window.history.replaceState({}, "", "/");
+    }
   });
 });
 

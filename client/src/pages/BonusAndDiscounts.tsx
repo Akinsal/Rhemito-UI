@@ -19,6 +19,7 @@ import {
   daysUntil,
   formatMoney,
   formatUkDate,
+  referralCodeForCurrency,
   referralHelpText,
   type MyReferral,
   type RewardsSummary,
@@ -59,11 +60,11 @@ interface HistoryRow {
 
 type PromoRow = { id: string; code: string; amount: number; currency: string | null; created_at: string };
 
-function buildHistory(data: RewardsSummary, currency: string, promoRows: PromoRow[]): HistoryRow[] {
+function buildHistory(data: RewardsSummary, currency: string, promoRows: PromoRow[], homeCurrency: string): HistoryRow[] {
   const statusById = new Map(data.wallet.credits.map((c) => [c.id, c.status]));
   const rows: HistoryRow[] = data.wallet.history
     // Repayment rows (CLAWBACK) are not shown as bonus activity; they are explained by the outstanding-repayment line
-    .filter((h) => h.currency === currency && h.type !== "CLAWBACK" && h.type !== "CLAWBACK_SETTLED")
+    .filter((h) => String(h.currency || homeCurrency).toUpperCase() === currency && h.type !== "CLAWBACK" && h.type !== "CLAWBACK_SETTLED")
     .map((h): HistoryRow => {
       const credit_source = h.credit_source ?? null;
       if (h.type === "EARNED") {
@@ -79,7 +80,7 @@ function buildHistory(data: RewardsSummary, currency: string, promoRows: PromoRo
       };
     });
   for (const p of promoRows) {
-    if ((p.currency ?? currency) !== currency) continue;
+    if (String(p.currency || homeCurrency).toUpperCase() !== currency) continue;
     rows.push({ id: p.id, date: p.created_at, description: PROMO_COPY.savingsRow(p.code), kind: "promo", amount: -Math.abs(p.amount), currency, credit_source: "PROMO" });
   }
   return rows.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -127,58 +128,135 @@ export default function BonusAndDiscounts() {
   const search = useSearch();
   const { toast } = useToast();
   const rewards = useRewards();
-  const initialTab = (new URLSearchParams(search).get("tab") as Tab) || "overview";
+  const searchParams = new URLSearchParams(search);
+  const initialTab = (searchParams.get("tab") as Tab) || "overview";
   const [tab, setTab] = useState<Tab>(["overview", "history", "referrals"].includes(initialTab) ? initialTab : "overview");
   const [filter, setFilter] = useState<HistoryFilter>("all");
-  const [pickedCurrency, setPickedCurrency] = useState<string | null>(null);
+  const currencyParam = searchParams.get("currency")?.trim().toUpperCase();
+  const [pickedCurrency, setPickedCurrency] = useState<string | null>(
+    currencyParam && /^[A-Z]{3}$/.test(currencyParam) ? currencyParam : null,
+  );
   // ?source=REFERRAL|SCHEME|MANUAL preselects the source filter (the referral screens link here)
-  const sourceParam = new URLSearchParams(search).get("source")?.toUpperCase();
+  const sourceParam = searchParams.get("source")?.toUpperCase();
   const [source, setSource] = useState<CreditSource | "ALL">(isCreditSource(sourceParam) ? sourceParam : "ALL");
   const promoSavings = usePromoSavings();
   // Live bonus offers (Ways to earn). Hidden when the bonus service is not reachable.
   const bonusSummary = useBonusSummary(pickedCurrency ?? undefined);
 
   const data = rewards.data;
-  const currencies = useMemo(() => {
-    const set = new Set<string>([data?.currency ?? "GBP", ...(data?.sendCurrencies ?? []), ...(data?.wallet.balances.map((b) => b.currency) ?? [])]);
-    return Array.from(set);
-  }, [data]);
-  const currency = pickedCurrency ?? data?.currency ?? "GBP";
-  const balance = balanceFor(data?.wallet, currency);
-  const unused = (data?.wallet.unused ?? []).filter((c) => c.currency === currency && (source === "ALL" || c.credit_source === source)).sort((a, b) => String(a.expires_on).localeCompare(String(b.expires_on)));
+  const homeCurrency = (data?.currency ?? "GBP").toUpperCase();
+  const currency = (pickedCurrency ?? homeCurrency).toUpperCase();
   // Promo savings come from the promo module (PROMO-RHEMITO P-50); until Mito serves them, fall back to the wallet field (P-53)
-  const promoRows: PromoRow[] = promoSavings.notAvailable || (!promoSavings.savings && !promoSavings.isError)
-    ? (data?.wallet.promo_redemptions ?? []).map((p) => ({ id: p.id, code: p.code, amount: p.amount, currency: p.currency, created_at: p.created_at }))
-    : (promoSavings.savings?.items ?? []).map((p) => ({ id: p.id, code: p.code, amount: p.amount, currency: p.currency, created_at: p.createdAt }));
-  const history = data ? buildHistory(data, currency, promoRows) : [];
+  const promoRows: PromoRow[] = useMemo(
+    () =>
+      promoSavings.notAvailable || (!promoSavings.savings && !promoSavings.isError)
+        ? (data?.wallet.promo_redemptions ?? []).map((p) => ({ id: p.id, code: p.code, amount: p.amount, currency: p.currency, created_at: p.created_at }))
+        : (promoSavings.savings?.items ?? []).map((p) => ({ id: p.id, code: p.code, amount: p.amount, currency: p.currency, created_at: p.createdAt })),
+    [data?.wallet.promo_redemptions, promoSavings.notAvailable, promoSavings.savings, promoSavings.isError],
+  );
+  const currencies = useMemo(() => {
+    const set = new Set<string>();
+    const add = (c: string | null | undefined) => {
+      const normalized = typeof c === "string" ? c.trim().toUpperCase() : "";
+      if (/^[A-Z]{3}$/.test(normalized)) set.add(normalized);
+    };
+    add(homeCurrency);
+    add(pickedCurrency);
+    for (const c of data?.sendCurrencies ?? []) add(c);
+    for (const b of data?.wallet.balances ?? []) add(b.currency);
+    for (const u of data?.wallet.unused ?? []) add(u.currency);
+    for (const cr of data?.wallet.credits ?? []) add(cr.currency);
+    for (const h of data?.wallet.history ?? []) add(h.currency);
+    add(data?.offer?.currency);
+    for (const o of data?.offers ?? []) add(o.currency);
+    for (const r of data?.referrals.data ?? []) add(r.currency);
+    for (const c of Object.keys(data?.referrals.summary?.total_earned ?? {})) add(c);
+    for (const p of promoRows) add(p.currency);
+    for (const c of bonusSummary.data?.currencies ?? []) add(c);
+    for (const o of bonusSummary.data?.offers ?? []) add(o.currency);
+    return Array.from(set);
+  }, [data, homeCurrency, pickedCurrency, promoRows, bonusSummary.data]);
+
+  const balance = balanceFor(data?.wallet, currency);
+  const unused = (data?.wallet.unused ?? [])
+    .filter((c) => String(c.currency || homeCurrency).toUpperCase() === currency && (source === "ALL" || c.credit_source === source))
+    .sort((a, b) => String(a.expires_on).localeCompare(String(b.expires_on)));
+  const history = data ? buildHistory(data, currency, promoRows, homeCurrency) : [];
   // The source filter narrows the lists only; the tiles always show the whole balance
   const bySourceRows = source === "ALL" || filter === "promo" ? history : history.filter((h) => h.credit_source === source);
   const filtered = filter === "all" ? bySourceRows : bySourceRows.filter((h) => h.kind === filter);
   const showSourceFilter = (balance.by_source?.length ?? 0) > 1 || source !== "ALL";
+  const waysToEarnOffers = (bonusSummary.data?.offers ?? []).filter((o) => !o.currency || o.currency.toUpperCase() === currency);
+
+  const buildUrl = (nextTab: Tab, nextPicked: string | null = pickedCurrency, nextSource?: CreditSource) => {
+    const params = new URLSearchParams();
+    if (nextTab !== "overview") params.set("tab", nextTab);
+    if (nextSource) params.set("source", nextSource);
+    const curParam = nextPicked && (!data?.currency || nextPicked !== homeCurrency) ? nextPicked : null;
+    if (curParam) params.set("currency", curParam);
+    const qs = params.toString();
+    return qs ? `/bonus-discounts?${qs}` : "/bonus-discounts";
+  };
+
   const viewSource = (next: CreditSource) => {
     setSource(next);
     setFilter("all");
     setTab("history");
-    setLocation(`/bonus-discounts?tab=history&source=${next}`, { replace: true });
+    setLocation(buildUrl("history", pickedCurrency, next), { replace: true });
   };
-  const promoSaved = promoRows.filter((p) => (p.currency ?? currency) === currency).reduce((s, p) => s + Math.abs(p.amount), 0);
-  const referrals = data?.referrals.data ?? [];
-  const referralSummary = data?.referrals.summary;
+  const promoSaved = promoRows
+    .filter((p) => String(p.currency || homeCurrency).toUpperCase() === currency)
+    .reduce((s, p) => s + Math.abs(p.amount), 0);
+  const referrals = (data?.referrals.data ?? []).filter(
+    (r) => String(r.currency || homeCurrency).toUpperCase() === currency,
+  );
+  const filteredReferralSummary = {
+    joined: referrals.length,
+    earned_count: referrals.filter((r) => Number(r.credited) > 0).length,
+    total_earned: referrals.reduce((sum, r) => sum + Number(r.credited || 0), 0),
+  };
 
   const changeTab = (value: string) => {
-    setTab(value as Tab);
-    setLocation(value === "overview" ? "/bonus-discounts" : `/bonus-discounts?tab=${value}`, { replace: true });
+    const nextTab = value as Tab;
+    setTab(nextTab);
+    setLocation(buildUrl(nextTab, pickedCurrency), { replace: true });
+  };
+
+  const handleCurrencyChange = (value: string) => {
+    const upper = value.trim().toUpperCase();
+    const nextPicked = data?.currency && upper === homeCurrency ? null : upper;
+    setPickedCurrency(nextPicked);
+    setLocation(buildUrl(tab, nextPicked, tab === "history" && source !== "ALL" ? source : undefined), { replace: true });
   };
 
   const copyLink = async () => {
-    const allOffers = data?.offers && data.offers.length > 0 ? data.offers : data?.offer ? [data.offer] : [];
-    const matchedOffer = allOffers.find((o) => o.currency === currency) ?? data?.offer;
-    const baseLink = (matchedOffer?.referral_link ?? data?.offer?.referral_link ?? "").split("?")[0];
-    const link = baseLink || (matchedOffer?.referral_link ?? data?.offer?.referral_link);
+    const offerCurrency = (o: { currency?: string | null }) => String(o.currency || homeCurrency).toUpperCase();
+    const allOffers = data?.offers && data.offers.length > 0
+      ? (data.offer && !data.offers.some((o) => o.rule_id === data.offer!.rule_id && offerCurrency(o) === offerCurrency(data.offer!))
+        ? [data.offer, ...data.offers]
+        : data.offers)
+      : data?.offer
+        ? [data.offer]
+        : [];
+    const matchedOffer =
+      allOffers.find((o) => offerCurrency(o) === currency && !o.cap_reached) ??
+      allOffers.find((o) => offerCurrency(o) === currency);
 
+    if (!matchedOffer) {
+      toast({ title: "No referral offer right now", description: `There is no Refer & Earn offer for ${currency} at the moment.` });
+      return;
+    }
+
+    const isMultiCurrency = allOffers.length > 1;
+    const rawCode = matchedOffer.referral_code ?? data?.customer?.referralCode ?? data?.offer?.referral_code ?? "";
+    const effectiveCode = isMultiCurrency && rawCode ? referralCodeForCurrency(rawCode, currency) : rawCode;
+    const rawBaseLink = (matchedOffer.referral_link ?? data?.offer?.referral_link ?? "").split("?")[0];
+    const link = isMultiCurrency && effectiveCode && rawBaseLink.includes("/ref/")
+      ? `${rawBaseLink.replace(/\/ref\/[^/]+$/, "")}/ref/${effectiveCode}`
+      : rawBaseLink || matchedOffer.referral_link || "";
 
     if (!link) {
-      toast({ title: "No referral offer right now", description: "There is no Refer & Earn offer for your currency at the moment." });
+      toast({ title: "No referral offer right now", description: `There is no Refer & Earn offer for ${currency} at the moment.` });
       return;
     }
     try {
@@ -218,8 +296,8 @@ export default function BonusAndDiscounts() {
             <p className="mt-1 text-[15px] text-slate-600">Track your rewards, referrals and savings.</p>
           </div>
           {currencies.length > 1 && (
-            <Select value={currency} onValueChange={setPickedCurrency}>
-              <SelectTrigger className="h-9 w-[120px] rounded-full border-[#d2d0ce]" aria-label="Currency">
+            <Select value={currency} onValueChange={handleCurrencyChange}>
+              <SelectTrigger className="h-9 w-[120px] rounded-full border-[#d2d0ce]" aria-label="Currency" data-testid="rewards-currency-select">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -313,7 +391,7 @@ export default function BonusAndDiscounts() {
                   )}
                 </Card>
 
-                <WaysToEarn offers={bonusSummary.data?.offers ?? []} blocked={data?.wallet.bonus_blocked || bonusSummary.data?.blocked} />
+                <WaysToEarn offers={waysToEarnOffers} blocked={data?.wallet.bonus_blocked || bonusSummary.data?.blocked} />
               </TabsContent>
 
               <TabsContent value="history" className="mt-6 space-y-4">
@@ -423,8 +501,8 @@ export default function BonusAndDiscounts() {
                 ) : (
                   <>
                     <p className="text-sm text-[#323130]" data-testid="referral-summary">
-                      Joined: {referralSummary?.joined ?? referrals.length} · Earned: {referralSummary?.earned_count ?? 0} · Total earned:{" "}
-                      {Object.entries(referralSummary?.total_earned ?? {}).map(([c, v]) => formatMoney(v, c)).join(", ") || formatMoney(0, currency)}
+                      Joined: {filteredReferralSummary.joined} · Earned: {filteredReferralSummary.earned_count} · Total earned:{" "}
+                      {formatMoney(filteredReferralSummary.total_earned, currency)}
                     </p>
                     <button type="button" className="self-start text-[15px] font-semibold text-[#2e5bff] hover:underline" data-testid="referral-view-credits" onClick={() => viewSource("REFERRAL")}>
                       View referral bonus in your history

@@ -400,7 +400,11 @@ export function ReferEarnCard({
                 )}
               </div>
               <Link
-                href="/bonus-discounts?tab=referrals"
+                href={
+                  activeOffer.currency && offer.currency && activeOffer.currency !== offer.currency
+                    ? `/bonus-discounts?tab=referrals&currency=${encodeURIComponent(activeOffer.currency)}`
+                    : "/bonus-discounts?tab=referrals"
+                }
                 className="inline-flex items-center gap-1 text-xs sm:text-sm font-semibold text-[#2e5bff] hover:underline shrink-0"
               >
                 View all referrals

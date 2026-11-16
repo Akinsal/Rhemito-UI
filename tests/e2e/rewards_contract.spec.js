@@ -642,4 +642,180 @@ test.describe('Rewards contract — Refer & Earn card', () => {
         await expect(preview).toBeVisible();
         await expect(preview).toContainText('Why register & send with Rhemito:');
     });
+
+    /**
+     * CONTRACT REF-23: the Reward$ currency selector (rewards-currency-select) filters Overview, History, and My referrals
+     * consistently across currencies (GBP, USD, EUR) without cross-currency leakage, persists across tab switches, and
+     * pre-selects the active corridor currency from the Dashboard "View all referrals" link.
+     * CODE: client/src/pages/BonusAndDiscounts.tsx, client/src/components/rewards/ReferEarnCard.tsx.
+     */
+    test('[REF-23] currency selector filters Overview, History, and My referrals consistently across GBP, USD, and EUR', async ({ page }) => {
+        const gbpOffer = {
+            ...offer,
+            rule_id: 81,
+            currency: 'GBP',
+            referral_code: 'JOHN2880GBP',
+            referral_link: 'http://localhost:5000/ref/JOHN2880GBP',
+        };
+        const usdOffer = {
+            ...offer,
+            rule_id: 82,
+            currency: 'USD',
+            referrer_reward: 10,
+            referee_reward: 20,
+            floor: 100,
+            text: 'Invite friends with your link. You get $10.00 and your friend gets $20.00 in bonus credit when they send $100.00 or more within 30 days of joining.',
+            referral_code: 'JOHN2880USD',
+            referral_link: 'http://localhost:5000/ref/JOHN2880USD',
+        };
+        const multiData = {
+            customer: { id: 'user_123', referralCode: 'JOHN2880', currency: 'GBP' },
+            currency: 'GBP',
+            sendCurrencies: ['GBP', 'USD', 'EUR'],
+            offer: gbpOffer,
+            offers: [gbpOffer, usdOffer],
+            wallet: {
+                bonus_blocked: false,
+                balances: [
+                    {
+                        currency: 'GBP',
+                        available: 7,
+                        earned: 15,
+                        used: 8,
+                        expired: 0,
+                        used_transfer_count: 1,
+                        referral_credit_count: 1,
+                        other_credit_count: 0,
+                        by_source: [{ credit_source: 'REFERRAL', label: 'Referrals', earned: 15, used: 8, expired: 0, removed: 0, available: 7 }],
+                    },
+                    {
+                        currency: 'USD',
+                        available: 10,
+                        earned: 10,
+                        used: 0,
+                        expired: 0,
+                        used_transfer_count: 0,
+                        referral_credit_count: 1,
+                        other_credit_count: 0,
+                        by_source: [{ credit_source: 'REFERRAL', label: 'Referrals', earned: 10, used: 0, expired: 0, removed: 0, available: 10 }],
+                    },
+                ],
+                unused: [
+                    { id: 'u_gbp', source: 'Referrer reward – referred Sarah S.', credit_source: 'REFERRAL', credit_source_label: 'Referral bonus – Sarah S.', reason_code: 'REFERRAL_REWARD', amount: 15, remaining: 7, currency: 'GBP', earned_on: '2026-10-01', expires_on: inDays(80), status: 'PARTLY_USED' },
+                    { id: 'u_usd', source: 'Referrer reward – referred Alex M.', credit_source: 'REFERRAL', credit_source_label: 'Referral bonus – Alex M.', reason_code: 'REFERRAL_REWARD', amount: 10, remaining: 10, currency: 'USD', earned_on: '2026-10-05', expires_on: inDays(85), status: 'UNUSED' },
+                ],
+                credits: [
+                    { id: 'u_gbp', amount: 15, remaining: 7, currency: 'GBP', status: 'PARTLY_USED', expires_on: inDays(80), notes: '', reason_code: 'REFERRAL_REWARD', created_at: '2026-10-01' },
+                    { id: 'u_usd', amount: 10, remaining: 10, currency: 'USD', status: 'UNUSED', expires_on: inDays(85), notes: '', reason_code: 'REFERRAL_REWARD', created_at: '2026-10-05' },
+                ],
+                history: [
+                    { id: 'u_gbp', created_at: '2026-10-01T10:00:00Z', type: 'EARNED', reason_code: 'REFERRAL_REWARD', amount: 15, currency: 'GBP', notes: 'Referrer reward – referred Sarah S.', transfer_id: null, source_credit_id: null, credit_source: 'REFERRAL', credit_source_label: 'Referral bonus – Sarah S.' },
+                    { id: 'u_usd', created_at: '2026-10-05T10:00:00Z', type: 'EARNED', reason_code: 'REFERRAL_REWARD', amount: 10, currency: 'USD', notes: 'Referrer reward – referred Alex M.', transfer_id: null, source_credit_id: null, credit_source: 'REFERRAL', credit_source_label: 'Referral bonus – Alex M.' },
+                ],
+                promo_redemptions: [
+                    { id: 'p_legacy_null', code: 'LEGACY5', amount: -5, currency: null, transfer_id: 'TXN-LEG', created_at: '2026-10-02T10:00:00Z' },
+                    { id: 'p_usd_4', code: 'USDSAVE4', amount: -4, currency: 'USD', transfer_id: 'TXN-USD', created_at: '2026-10-06T10:00:00Z' },
+                ],
+            },
+            referrals: {
+                data: [
+                    { id: 'R_GBP_1', friend: 'Sarah S.', joined_on: '2026-09-20T10:00:00Z', status: 'REWARDED', status_label: 'Earned', currency: 'GBP', floor: 50, qualification_deadline: inDays(17), reward: 5, credited: 5 },
+                    { id: 'R_GBP_2', friend: 'Musa I.', joined_on: '2026-09-25T10:00:00Z', status: 'REGISTERED', status_label: 'Joined', currency: 'GBP', floor: 50, qualification_deadline: inDays(22), reward: 5, credited: 0 },
+                    { id: 'R_USD_1', friend: 'Alex M.', joined_on: '2026-10-04T10:00:00Z', status: 'REWARDED', status_label: 'Earned', currency: 'USD', floor: 100, qualification_deadline: inDays(25), reward: 10, credited: 10 },
+                ],
+                summary: { joined: 3, earned_count: 2, total_earned: { GBP: 5, USD: 10 } },
+            },
+            latestOffer: null,
+        };
+
+        await page.route('**/api/rewards/summary**', (route) => route.fulfill(json({ data: multiData })));
+        await page.route('**/api/promocodes/savings**', (route) =>
+            route.fulfill(
+                json({
+                    data: {
+                        items: [
+                            { id: 'p_legacy_null', code: 'LEGACY5', amount: 5, currency: null, transferId: 'TXN-LEG', createdAt: '2026-10-02T10:00:00Z' },
+                            { id: 'p_usd_4', code: 'USDSAVE4', amount: 4, currency: 'USD', transferId: 'TXN-USD', createdAt: '2026-10-06T10:00:00Z' },
+                        ],
+                        saved: { GBP: 5, USD: 4 },
+                    },
+                }),
+            ),
+        );
+        await page.route('**/api/bonus/summary**', (route) =>
+            route.fulfill(
+                json({
+                    data: {
+                        currency: 'GBP',
+                        currencies: ['GBP', 'USD', 'EUR'],
+                        blocked: false,
+                        offers: [{ id: 1, name: 'Send 3, get £10', type: 'LOYALTY', currency: 'GBP', summary: 'Complete 3 transfers and get £10.00.' }],
+                        wallet: multiData.wallet,
+                    },
+                }),
+            ),
+        );
+
+        // 1. Dashboard USD corridor pill -> "View all referrals" deep-links to ?tab=referrals&currency=USD
+        await page.goto('/');
+        const card = page.getByTestId('refer-earn-card');
+        await card.getByRole('button', { name: 'USD → ALL' }).click();
+        await card.getByRole('link', { name: /View all referrals/i }).click();
+        await expect(page).toHaveURL(/\/bonus-discounts\?tab=referrals&currency=USD/);
+        await expect(page.getByTestId('rewards-currency-select')).toContainText('USD');
+
+        // 2. My referrals (USD): only USD referrals & per-currency summary
+        await expect(page.getByTestId('referral-summary')).toContainText('Joined: 1 · Earned: 1 · Total earned: $10.00');
+        await expect(page.getByTestId('referral-card-R_USD_1')).toContainText('Alex M.');
+        await expect(page.getByTestId('referral-card-R_GBP_1')).toHaveCount(0);
+        await expect(page.getByTestId('referral-card-R_GBP_2')).toHaveCount(0);
+
+        // 3. Overview & History (USD persists across tabs; legacy null-currency promo does not leak into USD)
+        await page.getByRole('tab', { name: 'Overview' }).click();
+        await expect(page.getByTestId('rewards-currency-select')).toContainText('USD');
+        await expect(page.getByTestId('bonus-totals')).toContainText('$10.00');
+        await expect(page.getByTestId('total-saved')).toContainText('$4.00');
+        await expect(page.getByTestId('unused-bonus')).toContainText('Alex M.');
+        await expect(page.getByTestId('unused-bonus')).not.toContainText('Sarah S.');
+        await expect(page.getByTestId('ways-to-earn')).toHaveCount(0);
+
+        await page.getByRole('tab', { name: 'History' }).click();
+        await expect(page.getByTestId('rewards-currency-select')).toContainText('USD');
+        await expect(page.getByTestId('bonus-history')).toContainText('Alex M.');
+        await expect(page.getByTestId('bonus-history')).toContainText('Promo code USDSAVE4');
+        await expect(page.getByTestId('bonus-history')).not.toContainText('Sarah S.');
+        await expect(page.getByTestId('bonus-history')).not.toContainText('Promo code LEGACY5');
+
+        // 4. Switch selector to GBP: legacy null-currency promo attributes to GBP, WaysToEarn & GBP referrals show
+        await page.getByTestId('rewards-currency-select').click();
+        await page.getByRole('option', { name: 'GBP', exact: true }).click();
+        await expect(page.getByTestId('bonus-history')).toContainText('Sarah S.');
+        await expect(page.getByTestId('bonus-history')).toContainText('Promo code LEGACY5');
+        await expect(page.getByTestId('bonus-history')).not.toContainText('Alex M.');
+
+        await page.getByRole('tab', { name: 'Overview' }).click();
+        await expect(page.getByTestId('bonus-totals')).toContainText('£7.00');
+        await expect(page.getByTestId('total-saved')).toContainText('£13.00');
+        await expect(page.getByTestId('ways-to-earn')).toContainText('Send 3, get £10');
+
+        await page.getByRole('tab', { name: 'My referrals' }).click();
+        await expect(page.getByTestId('referral-summary')).toContainText('Joined: 2 · Earned: 1 · Total earned: £5.00');
+        await expect(page.getByTestId('referral-card-R_GBP_1')).toContainText('Sarah S.');
+        await expect(page.getByTestId('referral-card-R_GBP_2')).toContainText('Musa I.');
+        await expect(page.getByTestId('referral-card-R_USD_1')).toHaveCount(0);
+
+        // 5. Switch selector to EUR (0 referrals, 0 balance): clean empty states across all 3 tabs
+        await page.getByTestId('rewards-currency-select').click();
+        await page.getByRole('option', { name: 'EUR', exact: true }).click();
+        await expect(page.getByTestId('referral-summary')).toHaveCount(0);
+        await expect(page.getByText('No referrals yet. Share your link to start earning.')).toBeVisible();
+
+        await page.getByRole('tab', { name: 'Overview' }).click();
+        await expect(page.getByTestId('bonus-totals')).toContainText('€0.00');
+        await expect(page.getByTestId('total-saved')).toContainText('€0.00');
+
+        await page.getByRole('tab', { name: 'History' }).click();
+        await expect(page.getByTestId('bonus-history')).toHaveCount(0);
+        await expect(page.getByText('No rewards yet. Invite friends or use a promo code to start saving.')).toBeVisible();
+    });
 });
