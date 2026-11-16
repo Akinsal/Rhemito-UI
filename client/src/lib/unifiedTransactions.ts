@@ -112,6 +112,24 @@ function toDisplayDate(iso: string | null): { label: string; sort: number } {
   return { label: formatShortDate(iso.slice(0, 10)), sort: Number.isNaN(sort) ? 0 : sort };
 }
 
+/**
+ * Full-precision sort timestamp for a Send Money transaction (`paidAt` / `createdAt`),
+ * preventing `toSendMoneyRow`'s display-only `"16 Nov 2026"` string from truncating
+ * same-day transfers to `00:00:00` midnight below same-day campaigns/invoices/requests.
+ */
+export function sendMoneyDateSort(
+  view: { createdAt?: string | null; paidAt?: string | null },
+  fallbackDateLabel?: string,
+): number {
+  const paid = view.paidAt ? Date.parse(view.paidAt) : NaN;
+  const created = view.createdAt ? Date.parse(view.createdAt) : NaN;
+  if (!Number.isNaN(paid) && !Number.isNaN(created)) return Math.max(paid, created);
+  if (!Number.isNaN(paid)) return paid;
+  if (!Number.isNaN(created)) return created;
+  const fallback = fallbackDateLabel ? Date.parse(fallbackDateLabel) : NaN;
+  return Number.isNaN(fallback) ? 0 : fallback;
+}
+
 export function fromMoneyRequest(req: MoneyRequestView): UnifiedTransactionRow {
   const status = REQUEST_STATUS[req.status] ?? { ...FALLBACK_STATUS, label: req.status };
   return {

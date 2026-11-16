@@ -464,6 +464,27 @@ export default function SendMoney() {
     const [checkoutFlowError, setCheckoutFlowError] = useState<string | null>(null);
     const checkoutFlowContainerRef = useRef<HTMLDivElement | null>(null);
 
+    const syncSendMoneyCache = useCallback(
+        (txView?: Awaited<ReturnType<typeof paySendMoneyTransaction>> | null) => {
+            if (txView && txView.id && txView.reference) {
+                queryClient.setQueriesData<Awaited<ReturnType<typeof paySendMoneyTransaction>>[]>(
+                    { queryKey: ["/api/send-money/transactions"] },
+                    (old) => {
+                        if (!Array.isArray(old)) return old;
+                        const rest = old.filter(
+                            (item) => item.id !== txView.id && item.reference !== txView.reference,
+                        );
+                        return [txView, ...rest];
+                    },
+                );
+            }
+            void queryClient.invalidateQueries({ queryKey: ["/api/send-money/transactions"] });
+            void queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
+            void queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+        },
+        [queryClient],
+    );
+
     const applyPaymentOutcome = useCallback(
         (params: {
             rawStatus?: string | null;
@@ -508,13 +529,14 @@ export default function SendMoney() {
                 journeyCode: params.journeyCode || extractJourneyCodeFromUrl(mitoPayByBankUrl),
                 timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             });
+            syncSendMoneyCache();
             const shouldAutoRedirect =
                 params.autoRedirectHome !== undefined ? params.autoRedirectHome : true;
             const countdownSeconds =
                 category === "completed" || category === "processing" ? 6 : 8;
             setRedirectCountdown(shouldAutoRedirect ? countdownSeconds : null);
         },
-        [mitoPayByBankUrl, paymentMethod, transactionRef],
+        [mitoPayByBankUrl, paymentMethod, syncSendMoneyCache, transactionRef],
     );
 
     const { user: authUser } = useAuth();
@@ -2340,6 +2362,7 @@ export default function SendMoney() {
             }).then((list) => {
                 setSenderBeneficiaries(list);
             });
+            syncSendMoneyCache(created);
             setTransactionSubmitted(true);
             setCurrentStep(4);
         } catch (err) {
@@ -5214,6 +5237,7 @@ export default function SendMoney() {
                                                                 }
                                                                 setLoadingPaymentMethod(null);
                                                             }
+                                                            syncSendMoneyCache(paidTx);
                                                             void rewards.refetch();
                                                             if (method.id === "card" && paidTx?.mitoPaymentSession) {
                                                                 setMitoCardPaymentSession(paidTx.mitoPaymentSession);
@@ -5815,6 +5839,7 @@ export default function SendMoney() {
                                                 onClick={() => {
                                                     setTransferComplete(true);
                                                     setPaymentTimerActive(false);
+                                                    syncSendMoneyCache();
                                                     toast({
                                                         title: "Payment confirmation received",
                                                         description: "We are verifying your bank transfer and processing your transaction.",
@@ -6012,12 +6037,14 @@ export default function SendMoney() {
                                         disabled={isSubmittingTransaction}
                                         onClick={async () => {
                                             setIsSubmittingTransaction(true);
+                                            let manualPaidTx: Awaited<ReturnType<typeof paySendMoneyTransaction>> | null = null;
                                             // Record manual transfer as the payment method — the
                                             // transaction stays awaiting_payment inside the 30-min window.
                                             if (transactionId) {
                                                 try {
                                                     if (promoApplied) promo.lock();
-                                                    await paySendMoneyTransaction(transactionId, "manual_transfer", promoApplied ? { code: promoCode, discount: promoDiscount } : null, useBonus ? { mode: bonusType, amount: bonusAmount } : null);
+                                                    manualPaidTx = await paySendMoneyTransaction(transactionId, "manual_transfer", promoApplied ? { code: promoCode, discount: promoDiscount } : null, useBonus ? { mode: bonusType, amount: bonusAmount } : null);
+                                                    syncSendMoneyCache(manualPaidTx);
                                                 } catch (e) {
                                                     if (e instanceof SendMoneyApiError && e.code.startsWith("BONUS_")) {
                                                         bonusRefused(e);

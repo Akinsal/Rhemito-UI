@@ -6,7 +6,9 @@ import {
   invoiceActionable,
   moneyRequestAwaiting,
   moneyRequestLinkShareable,
+  sendMoneyDateSort,
 } from "@/lib/unifiedTransactions";
+import { toSendMoneyRow } from "@/lib/sendMoney";
 import type { CampaignWithSummary } from "@/lib/groupPay";
 import type { InvoiceListItem } from "@/lib/invoices";
 import type { MoneyRequestView } from "@/lib/requests";
@@ -92,5 +94,87 @@ describe("unified transaction amount formatting", () => {
     expect(invoiceActionable("overdue")).toBe(true);
     expect(invoiceActionable("paid")).toBe(false);
     expect(invoiceActionable("expired")).toBe(false);
+  });
+
+  it("sendMoneyDateSort preserves full ISO time-of-day and places newly completed Send Money transfers at the top of 'All'", () => {
+    const campaignRow = fromCampaign({
+      id: "camp-same-day-1",
+      name: "Same-day Campaign",
+      targetAmount: 250,
+      currency: "GBP",
+      description: "Created earlier today",
+      bankAccountId: "acc-1",
+      bankAccountName: "Barclays",
+      status: "active",
+      createdAt: new Date("2026-11-16T14:00:00.000Z"),
+      uniqueLink: "http://localhost/contribute/camp-same-day-1",
+      creatorName: "Rita Money",
+      summary: { totalRaised: 0, contributorCount: 0 },
+    } as CampaignWithSummary);
+
+    const invoiceRow = fromInvoice({
+      id: "inv-same-day-1",
+      invoiceNumber: "INV-202611-00010",
+      clientName: "Acme Ltd",
+      clientEmail: "acme@example.com",
+      currency: "GBP",
+      fees: { invoiceAmount: 500, fee: 15, clientPays: 515, senderReceives: 500 },
+      sentAt: "2026-11-16T16:30:00.000Z",
+      status: "sent",
+    } as InvoiceListItem);
+
+    const earlierSendView = {
+      id: "txn-earlier",
+      reference: "TXN-202611-90001",
+      recipientName: "Aisha Bello",
+      service: "bank_deposit" as const,
+      paymentMethod: "card" as const,
+      sendCurrency: "GBP",
+      sendAmount: "100.00",
+      receiveCurrency: "NGN",
+      receiveAmount: "202550.00",
+      fee: "1.00",
+      exchangeRate: "2025.50",
+      promoCode: null,
+      status: "completed" as const,
+      createdAt: "2026-11-16T11:00:00.000Z",
+      paidAt: "2026-11-16T11:02:00.000Z",
+      cancelledAt: null,
+    };
+
+    const latestCompletedSendView = {
+      ...earlierSendView,
+      id: "txn-latest",
+      reference: "TXN-202611-90002",
+      recipientName: "Chinedu Okafor",
+      createdAt: "2026-11-16T18:00:00.000Z",
+      paidAt: "2026-11-16T18:05:00.000Z",
+    };
+
+    // Previously Created Yesterday -> Completed Today jumps to top based on paidAt
+    const paidTodayView = {
+      ...earlierSendView,
+      id: "txn-paid-later",
+      reference: "TXN-202611-90003",
+      createdAt: "2026-11-15T23:50:00.000Z",
+      paidAt: "2026-11-16T19:15:00.000Z",
+    };
+
+    const merged = [
+      { id: campaignRow.ref, dateSort: campaignRow.dateSort },
+      { id: invoiceRow.ref, dateSort: invoiceRow.dateSort },
+      ...[earlierSendView, latestCompletedSendView, paidTodayView].map((v) => {
+        const tx = toSendMoneyRow(v);
+        return { id: tx.id, dateSort: sendMoneyDateSort(v, tx.date) };
+      }),
+    ].sort((a, b) => b.dateSort - a.dateSort);
+
+    expect(merged.map((r) => r.id)).toEqual([
+      "TXN-202611-90003",
+      "TXN-202611-90002",
+      "INV-202611-00010",
+      "camp-sam",
+      "TXN-202611-90001",
+    ]);
   });
 });
