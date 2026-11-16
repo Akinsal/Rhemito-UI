@@ -279,8 +279,13 @@ export function loadMitoRetailCredentials(): MitoRetailCredentials | null {
   return cachedCredentials;
 }
 
+export function __resetMitoRetailCacheForTests(): void {
+  cachedCredentials = undefined;
+  cachedToken = null;
+}
+
 export function isMitoRetailConfigured(): boolean {
-  if (process.env.VITEST) return false;
+  if (process.env.VITEST && process.env.MITO_RETAIL_ALLOW_IN_VITEST !== "1") return false;
   return loadMitoRetailCredentials() !== null;
 }
 

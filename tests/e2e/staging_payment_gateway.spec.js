@@ -121,4 +121,84 @@ test.describe('Staging Payment Gateway & Recent Transactions Sorting E2E', () =>
         await expect(rows.first()).toBeVisible({ timeout: 10000 });
         await expect(rows.first()).toHaveAttribute('data-testid', 'row-transaction-TXN-LATEST-TODAY');
     });
+
+    test('Option A two-phase gateway ignores 3DS redirect/Pending postMessages and confirms via confirm-gateway on completion', async ({ page }) => {
+        await mockBeneficiaries(page);
+
+        let confirmGatewayPayload = null;
+        await page.route('**/api/send-money/transactions/*/pay', (route) =>
+            route.fulfill(
+                json({
+                    data: {
+                        id: 'tx-e2e-2phase-1',
+                        reference: 'TXN-E2E-2PHASE-1',
+                        recipientName: 'Akshita',
+                        service: 'bank_deposit',
+                        paymentMethod: 'instant_bank',
+                        sendCurrency: 'GBP',
+                        sendAmount: '100.00',
+                        receiveCurrency: 'NGN',
+                        receiveAmount: '183000.00',
+                        fee: '2.00',
+                        exchangeRate: '1830.00',
+                        status: 'awaiting_payment',
+                        paidAt: null,
+                        mitoPaymentUrl: 'https://mito-checkout-1cca8e18297e.herokuapp.com/retail-payment?journeyCode=JNY-E2E-2PHASE',
+                    },
+                }),
+            ),
+        );
+
+        await page.route('**/api/send-money/transactions/*/confirm-gateway', async (route) => {
+            confirmGatewayPayload = route.request().postDataJSON();
+            await route.fulfill(
+                json({
+                    data: {
+                        id: 'tx-e2e-2phase-1',
+                        reference: 'TXN-E2E-2PHASE-1',
+                        recipientName: 'Akshita',
+                        service: 'bank_deposit',
+                        paymentMethod: 'instant_bank',
+                        sendCurrency: 'GBP',
+                        sendAmount: '100.00',
+                        receiveCurrency: 'NGN',
+                        receiveAmount: '183000.00',
+                        fee: '2.00',
+                        exchangeRate: '1830.00',
+                        status: 'completed',
+                        paidAt: new Date().toISOString(),
+                    },
+                }),
+            );
+        });
+
+        await page.goto('/send-money');
+        await page.getByPlaceholder('0.00').first().fill('100');
+        await page.getByRole('button', { name: 'Continue' }).click();
+
+        await page.getByText('Akshita', { exact: true }).first().click();
+        await expect(page.getByText('Recipient Details').first()).toBeVisible();
+        await page.getByRole('button', { name: 'Continue' }).click();
+
+        await expect(page.getByText('How would you like to pay?')).toBeVisible({ timeout: 15000 });
+        await page.getByText('Instant Pay By Bank').click();
+
+        await expect(page.getByTestId('mito-pay-by-bank-modal')).toBeVisible({ timeout: 10000 });
+        await expect(page.getByText('Payment Successful')).toHaveCount(0);
+
+        // Simulated checkout.com 3DS redirect postMessage must NOT prematurely complete or call confirm-gateway
+        await page.evaluate(() => {
+            window.postMessage({ type: 'redirect', payload: { url: 'https://3ds.sandbox.checkout.com/challenge' } }, '*');
+        });
+        await page.waitForTimeout(300);
+        await expect(page.getByText('Payment Successful')).toHaveCount(0);
+        expect(confirmGatewayPayload).toBeNull();
+
+        // Gateway completion triggers confirm-gateway with outcome: 'completed' and renders Payment Successful
+        await page.evaluate(() => {
+            window.postMessage({ type: 'MITO_LINK_SUCCESS' }, '*');
+        });
+        await expect.poll(() => confirmGatewayPayload?.outcome).toBe('completed');
+        await expect(page.getByText('Payment Successful').first()).toBeVisible({ timeout: 10000 });
+    });
 });
