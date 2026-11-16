@@ -818,4 +818,66 @@ test.describe('Rewards contract — Refer & Earn card', () => {
         await expect(page.getByTestId('bonus-history')).toHaveCount(0);
         await expect(page.getByText('No rewards yet. Invite friends or use a promo code to start saving.')).toBeVisible();
     });
+
+    test('[REF-24] Referee welcome bonus copy, referral code hook, and referralHelpText matching DEC-2026-11-16-REFEREE-SIGNUP-BONUS', async ({ page }) => {
+        // 1. Visit /ref/JOHN2880 with mocked valid referral code (on desktop, /ref/:code redirects straight to /sign-in-sign-up?mode=signup)
+        await page.route('**/api/rewards/codes/**', (route) => route.fulfill(json({
+            data: {
+                code: 'JOHN2880',
+                referrerFirstName: 'John',
+                ruleId: 81,
+                offer: {
+                    rule_id: 81,
+                    name: 'UK DEfault',
+                    currency: 'GBP',
+                    reward_type: 'BOTH',
+                    referrer_reward: 10,
+                    referee_reward: 5,
+                    floor: 50,
+                    qualification_window_days: 90,
+                    bonus_validity_days: 90,
+                },
+                offers: [{
+                    rule_id: 81,
+                    name: 'UK DEfault',
+                    currency: 'GBP',
+                    reward_type: 'BOTH',
+                    referrer_reward: 10,
+                    referee_reward: 5,
+                    floor: 50,
+                    qualification_window_days: 90,
+                    bonus_validity_days: 90,
+                }],
+                sendCurrencies: ['GBP'],
+                signedIn: false,
+            }
+        })));
+        await page.route('**/api/rewards/visits', (route) => route.fulfill(json({ data: { counted: true } })));
+
+        await page.goto('/ref/JOHN2880');
+        await expect(page).toHaveURL(/sign-in-sign-up.*mode=signup/);
+
+        // Verify headline: John invited you – get £5.00 bonus credit on joining via link.
+        const invite = page.getByTestId('referral-invite');
+        await expect(invite).toBeVisible();
+        await expect(invite).toContainText('John invited you');
+        await expect(invite).toContainText('bonus credit on joining via link');
+
+        // Verify 3-step strip: Join · Send £50.00+ in 90 days · John gets £10.00
+        await expect(invite).toContainText('Join');
+        await expect(invite).toContainText('Send £50.00+ in 90 days');
+        await expect(invite).toContainText('John gets £10.00');
+
+        // Verify 3rd bullet
+        await expect(invite).toContainText('£5.00 welcome bonus credit added automatically when you sign up using the link');
+
+        // Verify referral-code-hook text in ReferralCodeField after email verification
+        await page.getByPlaceholder('e.g. jamescollor@email.com').fill(`referee.hook.${Date.now()}@example.com`);
+        await page.getByRole('button', { name: 'Continue' }).click();
+        await page.getByPlaceholder('000000').fill('123456');
+        await page.getByRole('button', { name: 'Verify Code' }).click();
+
+        await expect(page.getByTestId('referral-code-applied')).toBeVisible();
+        await expect(page.getByTestId('referral-code-hook')).toContainText('You get £5.00 on sign-up (John gets £10.00 on your first successful transaction)');
+    });
 });

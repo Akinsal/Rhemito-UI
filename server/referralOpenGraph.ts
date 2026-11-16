@@ -44,6 +44,7 @@ export interface ReferralPreviewDetails {
   floorFormatted: string;
   windowDays: number;
   corridorText: string;
+  hasRefereeReward?: boolean;
 }
 
 const KNOWN_SUFFIX_CURRENCIES = ["GBP", "USD", "EUR", "NGN", "INR", "JPY", "CNY", "AUD", "CAD", "ZAR", "KES", "GHS", "AED"];
@@ -75,10 +76,15 @@ export async function fetchReferralPreviewDetails(rawCode: string, ruleId?: numb
       null;
 
     const currency = String(matchedOffer?.currency || targetCur || "GBP").toUpperCase();
-    const rewardAmount =
-      matchedOffer && matchedOffer.reward_type !== "REFERRER" && Number(matchedOffer.referee_reward) > 0
+    const defaultReward = currency === "USD" ? 20 : currency === "EUR" ? 15 : 10;
+    const isReferrerOnly = Boolean(
+      matchedOffer && (matchedOffer.reward_type === "REFERRER" || !(Number(matchedOffer.referee_reward) > 0)),
+    );
+    const rewardAmount = isReferrerOnly
+      ? 0
+      : matchedOffer
         ? Number(matchedOffer.referee_reward)
-        : Number(matchedOffer?.referrer_reward || 10);
+        : defaultReward;
     const floorAmount = Number(matchedOffer?.floor ?? 100);
     const windowDays = Number(matchedOffer?.qualification_window_days || matchedOffer?.bonus_validity_days || 90);
     const corridorText = matchedOffer?.receive_currency ? ` to ${matchedOffer.receive_currency}` : "";
@@ -91,6 +97,7 @@ export async function fetchReferralPreviewDetails(rawCode: string, ruleId?: numb
       floorFormatted: fmtOgMoney(floorAmount, currency),
       windowDays,
       corridorText,
+      hasRefereeReward: !isReferrerOnly,
     };
   } catch {
     const currency = inferredCur || "GBP";
@@ -104,6 +111,7 @@ export async function fetchReferralPreviewDetails(rawCode: string, ruleId?: numb
       floorFormatted: fmtOgMoney(defaultFloor, currency),
       windowDays: 90,
       corridorText: "",
+      hasRefereeReward: true,
     };
   }
 }
@@ -143,8 +151,8 @@ export function renderReferralOgSvg(d: ReferralPreviewDetails): string {
   </g>
 
   <!-- Main Marketing Hook -->
-  <text x="72" y="182" fill="#F8FAFC" font-family="Plus Jakarta Sans, Inter, Arial, sans-serif" font-size="54" font-weight="800" letter-spacing="-1.2">Get ${reward} Bonus Credit</text>
-  <text x="72" y="232" fill="#CBD5E1" font-family="Inter, Arial, sans-serif" font-size="25" font-weight="500">on your first ${currency} transfer of ${floor} or more${corridor} within ${d.windowDays} days</text>
+  <text x="72" y="182" fill="#F8FAFC" font-family="Plus Jakarta Sans, Inter, Arial, sans-serif" font-size="54" font-weight="800" letter-spacing="-1.2">${d.hasRefereeReward === false ? `Join ${inviter} on Rhemito` : `Get ${reward} Bonus Credit`}</text>
+  <text x="72" y="232" fill="#CBD5E1" font-family="Inter, Arial, sans-serif" font-size="25" font-weight="500">${d.hasRefereeReward === false ? `Fast, low-cost international ${currency} money transfers${corridor} across global corridors` : `added when you join — redeem on your first ${currency} transfer of ${floor}+${corridor} within ${d.windowDays} days`}</text>
 
   <!-- Why Register & Transfer Box -->
   <g transform="translate(72, 268)">
@@ -152,13 +160,13 @@ export function renderReferralOgSvg(d: ReferralPreviewDetails): string {
     <text x="32" y="42" fill="#93C5FD" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="1.4">WHY REGISTER &amp; TRANSFER WITH RHEMITO</text>
     <text x="32" y="84" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="600">✓  Great exchange rates &amp; low, transparent fees across global corridors</text>
     <text x="32" y="126" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="600">✓  Fast, secure transfers straight to bank accounts, mobile wallets &amp; cash pick-up</text>
-    <text x="32" y="168" fill="#5EEAD4" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="700">✓  ${reward} welcome bonus unlocked automatically when your first qualifying transfer completes</text>
+    <text x="32" y="168" fill="#5EEAD4" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="700">${d.hasRefereeReward === false ? `✓  Trusted UK money transfer service regulated for fast global payouts` : `✓  ${reward} welcome bonus credit added automatically when you sign up using the link`}</text>
   </g>
 
   <!-- 3-Step Footer Bar -->
   <g transform="translate(72, 496)">
     <rect x="0" y="0" width="710" height="72" rx="16" fill="#162035" stroke="#2D3A59" stroke-width="1"/>
-    <text x="24" y="43" fill="#E2E8F0" font-family="Inter, Arial, sans-serif" font-size="19" font-weight="600">1. Register free   →   2. Send ${floor}+ in ${d.windowDays} days   →   3. Unlock ${reward}</text>
+    <text x="24" y="43" fill="#E2E8F0" font-family="Inter, Arial, sans-serif" font-size="19" font-weight="600">${d.hasRefereeReward === false ? `1. Join via link   →   2. Verify your account   →   3. Send fast &amp; securely` : `1. Join via link   →   2. Get ${reward} on sign-up   →   3. Redeem on ${floor}+ (${d.windowDays}d)`}</text>
 
     <rect x="734" y="0" width="322" height="72" rx="16" fill="#3D48D1"/>
     <text x="760" y="28" fill="#DBEAFE" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="1.2">INVITE CODE</text>
@@ -186,8 +194,13 @@ export async function resolveReferralOpenGraphMeta(req: Request): Promise<Referr
   const host = req.get("host") || serverConfig.publicBaseUrl.replace(/^https?:\/\//, "");
   const origin = `${proto}://${host}`.replace(/\/+$/, "");
 
-  const title = `${details.referrerFirstName} invited you to Rhemito — Get ${details.rewardFormatted} bonus credit on your first transfer!`;
-  const description = `Join Rhemito with code ${details.code} and send ${details.floorFormatted} or more${details.corridorText} within ${details.windowDays} days to unlock your ${details.rewardFormatted} welcome bonus. Why Rhemito? Great exchange rates, low transparent fees, and fast, secure international transfers to bank accounts & mobile wallets.`;
+  const showWelcomeReward = details.hasRefereeReward !== false;
+  const title = showWelcomeReward
+    ? `${details.referrerFirstName} invited you to Rhemito — Get ${details.rewardFormatted} bonus credit when you join!`
+    : `${details.referrerFirstName} invited you to Rhemito`;
+  const description = showWelcomeReward
+    ? `Join Rhemito with code ${details.code} to get ${details.rewardFormatted} welcome bonus credit on sign-up — redeem it on your first qualifying transfer of ${details.floorFormatted} or more${details.corridorText} within ${details.windowDays} days. Why Rhemito? Great exchange rates, low transparent fees, and fast, secure international transfers to bank accounts & mobile wallets.`
+    : `Join Rhemito with code ${details.code} for great exchange rates, low transparent fees, and fast, secure international transfers${details.corridorText} to bank accounts & mobile wallets.`;
   const imageUrl = `${origin}/api/rewards/og-image/${encodeURIComponent(details.code)}`;
   const url = `${origin}${req.originalUrl}`;
 

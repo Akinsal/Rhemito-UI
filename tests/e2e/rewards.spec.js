@@ -178,7 +178,7 @@ test.describe('Bonus & Discounts page', () => {
         await page.goto('/bonus-discounts?tab=referrals');
         await expect(page.getByTestId('referral-summary')).toContainText('Joined: 3 · Earned: 1 · Total earned: £5.00');
         await expect(page.getByTestId('referral-card-R2')).toContainText('You get £5.00 when it completes');
-        await expect(page.getByTestId('referral-card-R3')).toContainText('Waiting for their first transfer of £50.00 or more');
+        await expect(page.getByTestId('referral-card-R3')).toContainText('Waiting for their first successful transfer of £50.00 or more');
         await expect(page.getByTestId('referral-card-R1')).toContainText('You earned £5.00 — added to your bonus credit');
     });
 });

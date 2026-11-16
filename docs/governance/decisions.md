@@ -1,0 +1,50 @@
+# Governance Decisions Register (`decisions.md`)
+
+> **Standard:** Universal AI Agent Governance Standard (v1.0) — §03, §08, §09  
+> **Repository:** `Rhemito-UI` & `PromoCode` (Mito Money Admin / Referral & Bonus Engine)
+
+---
+
+## Active Approved Decisions
+
+### `DEC-2026-11-16-REFEREE-SIGNUP-BONUS` — Referee Instant Sign-Up Bonus & First-Transaction Redemption
+
+- **Date Approved:** 16 November 2026 (`2026-11-16`)
+- **Decision Owner / Approver:** Mohammad Mumtaz (Product Owner)
+- **Status:** `Human-Approved` (Active Baseline)
+- **Affected Repositories & Modules:**
+  - `PromoCode` (`server/referral.js`, `server/bonus/wallet.js`, `server/tests/contracts/referral.contract.test.js`, `Docs/Requirements/*.md`)
+  - `Rhemito-UI` (`client/src/components/rewards/ReferralSignup.tsx`, `client/src/lib/rewards.ts`, `client/src/pages/Dashboard.tsx`, `client/src/pages/ReferralLanding.tsx`, `client/src/components/rewards/ReferEarnCard.tsx`, `client/src/components/rewards/ExistingUserReferralCard.tsx`, `server/referralOpenGraph.ts`, `docs/requirements/*.md`)
+
+#### 1. Business Decision Summary
+1. **Instant Referee Welcome Credit on Sign-Up (`REGISTERED`):**
+   - A referee who registers via a referral link or referral code receives their welcome bonus credit (`referee_reward`) **immediately upon signing up** (`status = 'REGISTERED'`) when the matched rule rewards the referee (`reward_type === 'BOTH'` or `'REFEREE'`, `referee_reward > 0`) and the referee is not blocked by `eligibilityGuard`.
+   - Referee welcome credit issuance is **no longer gated on `referee.kyc_status === 'PASSED'`** at registration or rule-upgrade backfill (`createReferral`, `updateRule`, `tryAward`), because bonus credit is non-withdrawable and Rhemito enforces mandatory KYC verification before any Send Money transfer can be paid.
+   - Referrer reward (`referrer_reward`) continues to be issued **only when the referee's first qualifying transfer reaches `COMPLETED`** AND continues to require the referrer to have passed KYC (`status_reason = 'Awaiting referrer KYC'` when `referrer.kyc_status !== 'PASSED'`).
+2. **Redemption on First Valid Qualifying Transaction:**
+   - The referee can redeem their welcome bonus credit (`Pay less` or `Send more`) on their **first valid transaction** that meets the referral rule's **Floor** (`min_transaction_threshold`, `BELOW_FLOOR`) and **Corridor** (`receive_currency`, `WRONG_CORRIDOR`) within the qualification/validity window.
+   - Redeeming the referee bonus on that first qualifying transaction still reports the full pre-discount `sendAmount` (`amount >= floor`) to `POST /api/referral/transfer-events`, transitioning the referral `REGISTERED → PENDING → REWARDED` and crediting the referrer (`referrer_reward`) without double-crediting the referee (`!refereeCreditId` / idempotent `<referralId>:referee`).
+   - If the first transaction is `CANCELLED` or `FAILED`, `releaseBonus` restores the referee's welcome bonus credit and `handleTransferEvent` returns the referral to `REGISTERED`.
+   - If a completed qualifying transfer where the referee redeemed their sign-up bonus is subsequently `REFUNDED` (`REFERRAL_REVERSAL`), `voidCredit` and `releaseBonus` ensure any returned `BONUS_RETURNED` child credit is voided and subtracted from `spent` so both `BONUS_CLAWBACK=on` and `BONUS_CLAWBACK=off` (in either event arrival order) leave `available = 0` and `outstanding_debt = 0`.
+3. **UI Copy & Layout (Direction A + Dashboard Option 1):**
+   - **Direction A (Referral Signup, Landing, Share, Refer & Earn, OpenGraph):**
+     - `ReferralInviteStrip` headline: `<Name> invited you – get <referee_reward> bonus credit on joining via link.`
+     - `ReferralInviteStrip` 3-step bar (`BOTH`): `1. Join` → `2. Send <floor>+[ to <RCV>] in <QW> days` → `3. <Name> gets <referrer_reward>` (and `1. Join` → `2. Get <referee_reward> on sign-up` → `3. Send <floor>+...` for `REFEREE`-only).
+     - `ReferralInviteStrip` 3rd bullet: `<referee_reward> welcome bonus credit added automatically when you sign up using the link`.
+     - `ReferralCodeField` applied hook (`referral-code-hook`): `You get <referee_reward> on sign-up (<Name> gets <referrer_reward> on your first successful transaction)`.
+     - `referralHelpText("REGISTERED")`: `Waiting for their first successful transfer of <floor> or more · <n> day(s) left`.
+   - **Dashboard Option 1 (`Dashboard.tsx` `rewards-section-bonus-banners`):**
+     - Responsive `xl:flex-row` outer layout + `whitespace-nowrap` on `referral-bonus-earned-pill` so `Welcome bonus · Invited by <Name>` always renders on a single line without wrapping.
+
+#### 2. Alternatives Evaluated
+| Option | Summary | Outcome |
+| :--- | :--- | :--- |
+| **Direction A (Selected)** | Preserves `Join` · `Send <floor>+ to <RCV> in <QW> days` · `<Name> gets <referrer_reward>` matching Product Owner red-markup annotations and existing E2E step-2 pattern while stating instant sign-up credit in headline & bullet 3. | **Approved by Mohammad (2026-11-16)** |
+| **Direction B** | Changes Step 1 to `Join & get £21.00` and Step 2 to `Redeem on £50.00+...`. | Rejected (denser mobile wrapping, diverges from red markup). |
+| **Dashboard Option 1 (Selected)** | Keep `Welcome bonus · Invited by John Doe` in `referral-bonus-earned-pill` and prevent 2-line wrapping via `xl:flex-row` + `whitespace-nowrap`. | **Approved by Mohammad (2026-11-16)** |
+| **Dashboard Option 2** | Move `Invited by John Doe` into the subtitle paragraph below the pill. | Rejected in favour of Option 1. |
+
+#### 3. Superseded Baseline Rules (Preserved for Audit History — §09)
+- `REF-MITO-v1.1` (08/10/2026) `D5` (*"Credit is issued only when the qualifying transfer reaches COMPLETED"*) → Superseded for referee credit (`REGISTERED`); retained for referrer credit (`COMPLETED`).
+- `REF-MITO-v1.1` (08/10/2026) `D8` / `BR-34` (*"Both parties must have passed KYC before their credit is issued"* / `Awaiting referee KYC`) → Superseded for referee credit; retained for referrer credit (`Awaiting referrer KYC`).
+- `REFERRAL-13` (`PromoCode/server/tests/contracts/referral.contract.test.js`) → Updated 2026-11-16 to assert immediate referee credit on sign-up with `kyc_status: 'PENDING'` and referrer hold on `Awaiting referrer KYC`.

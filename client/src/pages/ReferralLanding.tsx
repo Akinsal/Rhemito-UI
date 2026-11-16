@@ -383,15 +383,18 @@ export default function ReferralLanding() {
   const referrerName = referralState.referrerFirstName || "John";
   const referrerInitial = referrerName.trim().charAt(0).toUpperCase() || "R";
   const currencyCode = offer?.currency || "GBP";
-  const rawRewardAmount =
-    offer && offer.reward_type !== "REFERRER" && Number(offer.referee_reward) > 0
-      ? Number(offer.referee_reward)
-      : Number(offer?.referrer_reward || 20);
+  const hasRefereeReward = Boolean(offer && offer.reward_type !== "REFERRER" && Number(offer.referee_reward) > 0);
+  const showWelcomeReward = !offer || hasRefereeReward;
+  const rawRewardAmount = hasRefereeReward ? Number(offer!.referee_reward) : 20;
   const rawFloorAmount = Number(offer?.floor ?? 100);
   const windowDays = Number(offer?.qualification_window_days ?? 30);
 
   const rewardFormatted = formatCompactAmount(rawRewardAmount, currencyCode);
   const floorFormatted = formatCompactAmount(rawFloorAmount, currencyCode);
+  const referrerRewardFormatted =
+    offer && Number(offer.referrer_reward) > 0
+      ? formatCompactAmount(Number(offer.referrer_reward), currencyCode)
+      : null;
 
   const playUrl = referralState.playStoreUrl || buildGooglePlayReferralUrl(referralState.trackingId, referralState.code);
   const appStoreUrl = referralState.appStoreUrl || APPLE_APP_STORE_URL;
@@ -453,17 +456,26 @@ export default function ReferralLanding() {
               <br />
               with an invitation.
             </h1>
-            <div className="text-[68px] max-[460px]:text-[66px] font-semibold leading-[1.05] tracking-[-4px] relative z-10">
-              <sup className="text-[35px] align-top leading-[1.55] tracking-[-1.5px] mr-[3px]">{rewardFormatted.symbol}</sup>
-              {rewardFormatted.numberText}
-              <span className="text-[10px] tracking-[1px] font-normal text-[#b5b5ca] ml-[9px] inline-block align-middle">
-                {currencyCode}
-              </span>
-            </div>
-            <p className="text-[11px] text-[#abaec4] mt-[8px] mb-0 relative z-10">
-              Bonus credit when you join &amp; send {floorFormatted.fullText}+
-              {offer?.receive_currency ? ` to ${offer.receive_currency}` : ""} within {windowDays} days.
-            </p>
+            {showWelcomeReward ? (
+              <>
+                <div className="text-[68px] max-[460px]:text-[66px] font-semibold leading-[1.05] tracking-[-4px] relative z-10">
+                  <sup className="text-[35px] align-top leading-[1.55] tracking-[-1.5px] mr-[3px]">{rewardFormatted.symbol}</sup>
+                  {rewardFormatted.numberText}
+                  <span className="text-[10px] tracking-[1px] font-normal text-[#b5b5ca] ml-[9px] inline-block align-middle">
+                    {currencyCode}
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#abaec4] mt-[8px] mb-0 relative z-10">
+                  Bonus credit added when you sign up — redeem on your first {floorFormatted.fullText}+ transfer
+                  {offer?.receive_currency ? ` to ${offer.receive_currency}` : ""} within {windowDays} days.
+                </p>
+              </>
+            ) : (
+              <p className="text-[11px] text-[#abaec4] mt-[8px] mb-0 relative z-10">
+                Join Rhemito with {referrerName}&apos;s personal invitation for fast, secure international transfers
+                {offer?.receive_currency ? ` to ${offer.receive_currency}` : ""}.
+              </p>
+            )}
 
             {/* Decorative Wireframe Orb */}
             <div
@@ -503,7 +515,15 @@ export default function ReferralLanding() {
               <li className="flex items-start gap-[6px]">
                 <span className="text-[#0d9488] font-bold shrink-0">✓</span>
                 <span>
-                  <strong className="text-[#182235]">{rewardFormatted.fullText} welcome bonus</strong> unlocked on your first {floorFormatted.fullText}+ transfer
+                  {showWelcomeReward ? (
+                    <>
+                      <strong className="text-[#182235]">{rewardFormatted.fullText} welcome bonus</strong> added automatically when you sign up using the link
+                    </>
+                  ) : (
+                    <>
+                      <strong className="text-[#182235]">Trusted UK money transfer app</strong> regulated and built for global corridors
+                    </>
+                  )}
                 </span>
               </li>
             </ul>
@@ -514,45 +534,133 @@ export default function ReferralLanding() {
             aria-label="How to earn your bonus"
             className="grid grid-cols-3 list-none p-0 mt-[18px] mb-[20px] max-[460px]:my-[18px] gap-[9px]"
           >
-            <li className="relative text-[9px] max-[360px]:text-[8px] text-[#9a9ead] leading-[1.5]">
-              <span aria-hidden="true" className="absolute left-[29px] right-[2px] top-[11px] h-px bg-[#e4e5ed]" />
-              <span
-                className={`w-[23px] h-[23px] grid place-items-center bg-[#f0edf9] text-[#7b65bd] text-[10px] font-semibold mb-[8px] ${
-                  isIos ? "rounded-full" : "rounded-[7px]"
-                }`}
-              >
-                1
-              </span>
-              <strong className="block text-[11px] max-[360px]:text-[10px] font-semibold text-[#3f475a]">Join Rhemito</strong>
-              Create your account
-            </li>
-            <li className="relative text-[9px] max-[360px]:text-[8px] text-[#9a9ead] leading-[1.5]">
-              <span aria-hidden="true" className="absolute left-[29px] right-[2px] top-[11px] h-px bg-[#e4e5ed]" />
-              <span
-                className={`w-[23px] h-[23px] grid place-items-center bg-[#f0edf9] text-[#7b65bd] text-[10px] font-semibold mb-[8px] ${
-                  isIos ? "rounded-full" : "rounded-[7px]"
-                }`}
-              >
-                2
-              </span>
-              <strong className="block text-[11px] max-[360px]:text-[10px] font-semibold text-[#3f475a]">
-                Send over {floorFormatted.fullText}
-              </strong>
-              Within {windowDays} days
-            </li>
-            <li className="relative text-[9px] max-[360px]:text-[8px] text-[#9a9ead] leading-[1.5]">
-              <span
-                className={`w-[23px] h-[23px] grid place-items-center bg-[#f0edf9] text-[#7b65bd] text-[10px] font-semibold mb-[8px] ${
-                  isIos ? "rounded-full" : "rounded-[7px]"
-                }`}
-              >
-                3
-              </span>
-              <strong className="block text-[11px] max-[360px]:text-[10px] font-semibold text-[#3f475a]">
-                Get {rewardFormatted.fullText} credit
-              </strong>
-              Once you qualify
-            </li>
+            {offer?.reward_type === "BOTH" && referrerRewardFormatted && showWelcomeReward ? (
+              <>
+                <li className="relative text-[9px] max-[360px]:text-[8px] text-[#9a9ead] leading-[1.5]">
+                  <span aria-hidden="true" className="absolute left-[29px] right-[2px] top-[11px] h-px bg-[#e4e5ed]" />
+                  <span
+                    className={`w-[23px] h-[23px] grid place-items-center bg-[#f0edf9] text-[#7b65bd] text-[10px] font-semibold mb-[8px] ${
+                      isIos ? "rounded-full" : "rounded-[7px]"
+                    }`}
+                  >
+                    1
+                  </span>
+                  <strong className="block text-[11px] max-[360px]:text-[10px] font-semibold text-[#3f475a]">Join Rhemito</strong>
+                  Get {rewardFormatted.fullText} on sign-up
+                </li>
+                <li className="relative text-[9px] max-[360px]:text-[8px] text-[#9a9ead] leading-[1.5]">
+                  <span aria-hidden="true" className="absolute left-[29px] right-[2px] top-[11px] h-px bg-[#e4e5ed]" />
+                  <span
+                    className={`w-[23px] h-[23px] grid place-items-center bg-[#f0edf9] text-[#7b65bd] text-[10px] font-semibold mb-[8px] ${
+                      isIos ? "rounded-full" : "rounded-[7px]"
+                    }`}
+                  >
+                    2
+                  </span>
+                  <strong className="block text-[11px] max-[360px]:text-[10px] font-semibold text-[#3f475a]">
+                    Send {floorFormatted.fullText}+
+                  </strong>
+                  Redeem in {windowDays} days
+                </li>
+                <li className="relative text-[9px] max-[360px]:text-[8px] text-[#9a9ead] leading-[1.5]">
+                  <span
+                    className={`w-[23px] h-[23px] grid place-items-center bg-[#f0edf9] text-[#7b65bd] text-[10px] font-semibold mb-[8px] ${
+                      isIos ? "rounded-full" : "rounded-[7px]"
+                    }`}
+                  >
+                    3
+                  </span>
+                  <strong className="block text-[11px] max-[360px]:text-[10px] font-semibold text-[#3f475a]">
+                    {referrerName} gets {referrerRewardFormatted.fullText}
+                  </strong>
+                  Once transfer completes
+                </li>
+              </>
+            ) : showWelcomeReward ? (
+              <>
+                <li className="relative text-[9px] max-[360px]:text-[8px] text-[#9a9ead] leading-[1.5]">
+                  <span aria-hidden="true" className="absolute left-[29px] right-[2px] top-[11px] h-px bg-[#e4e5ed]" />
+                  <span
+                    className={`w-[23px] h-[23px] grid place-items-center bg-[#f0edf9] text-[#7b65bd] text-[10px] font-semibold mb-[8px] ${
+                      isIos ? "rounded-full" : "rounded-[7px]"
+                    }`}
+                  >
+                    1
+                  </span>
+                  <strong className="block text-[11px] max-[360px]:text-[10px] font-semibold text-[#3f475a]">Join Rhemito</strong>
+                  Create your account
+                </li>
+                <li className="relative text-[9px] max-[360px]:text-[8px] text-[#9a9ead] leading-[1.5]">
+                  <span aria-hidden="true" className="absolute left-[29px] right-[2px] top-[11px] h-px bg-[#e4e5ed]" />
+                  <span
+                    className={`w-[23px] h-[23px] grid place-items-center bg-[#f0edf9] text-[#7b65bd] text-[10px] font-semibold mb-[8px] ${
+                      isIos ? "rounded-full" : "rounded-[7px]"
+                    }`}
+                  >
+                    2
+                  </span>
+                  <strong className="block text-[11px] max-[360px]:text-[10px] font-semibold text-[#3f475a]">
+                    Get {rewardFormatted.fullText} credit
+                  </strong>
+                  Added on sign-up
+                </li>
+                <li className="relative text-[9px] max-[360px]:text-[8px] text-[#9a9ead] leading-[1.5]">
+                  <span
+                    className={`w-[23px] h-[23px] grid place-items-center bg-[#f0edf9] text-[#7b65bd] text-[10px] font-semibold mb-[8px] ${
+                      isIos ? "rounded-full" : "rounded-[7px]"
+                    }`}
+                  >
+                    3
+                  </span>
+                  <strong className="block text-[11px] max-[360px]:text-[10px] font-semibold text-[#3f475a]">
+                    Send {floorFormatted.fullText}+
+                  </strong>
+                  Redeem in {windowDays} days
+                </li>
+              </>
+            ) : (
+              <>
+                <li className="relative text-[9px] max-[360px]:text-[8px] text-[#9a9ead] leading-[1.5]">
+                  <span aria-hidden="true" className="absolute left-[29px] right-[2px] top-[11px] h-px bg-[#e4e5ed]" />
+                  <span
+                    className={`w-[23px] h-[23px] grid place-items-center bg-[#f0edf9] text-[#7b65bd] text-[10px] font-semibold mb-[8px] ${
+                      isIos ? "rounded-full" : "rounded-[7px]"
+                    }`}
+                  >
+                    1
+                  </span>
+                  <strong className="block text-[11px] max-[360px]:text-[10px] font-semibold text-[#3f475a]">Join Rhemito</strong>
+                  Create your account
+                </li>
+                <li className="relative text-[9px] max-[360px]:text-[8px] text-[#9a9ead] leading-[1.5]">
+                  <span aria-hidden="true" className="absolute left-[29px] right-[2px] top-[11px] h-px bg-[#e4e5ed]" />
+                  <span
+                    className={`w-[23px] h-[23px] grid place-items-center bg-[#f0edf9] text-[#7b65bd] text-[10px] font-semibold mb-[8px] ${
+                      isIos ? "rounded-full" : "rounded-[7px]"
+                    }`}
+                  >
+                    2
+                  </span>
+                  <strong className="block text-[11px] max-[360px]:text-[10px] font-semibold text-[#3f475a]">
+                    Send {floorFormatted.fullText}+
+                  </strong>
+                  Within {windowDays} days
+                </li>
+                <li className="relative text-[9px] max-[360px]:text-[8px] text-[#9a9ead] leading-[1.5]">
+                  <span
+                    className={`w-[23px] h-[23px] grid place-items-center bg-[#f0edf9] text-[#7b65bd] text-[10px] font-semibold mb-[8px] ${
+                      isIos ? "rounded-full" : "rounded-[7px]"
+                    }`}
+                  >
+                    3
+                  </span>
+                  <strong className="block text-[11px] max-[360px]:text-[10px] font-semibold text-[#3f475a]">
+                    {referrerRewardFormatted ? `${referrerName} gets ${referrerRewardFormatted.fullText}` : "Fast global payout"}
+                  </strong>
+                  Once transfer completes
+                </li>
+              </>
+            )}
           </ol>
 
           {/* Platform Action Card & Install Button */}
@@ -732,11 +840,23 @@ export default function ReferralLanding() {
               <span className="hidden text-[12px] text-[#8b7bb0] group-open:inline">⌃</span>
             </summary>
             <p className="leading-[1.7] mt-[10px] mb-0 text-[#8890a2]">
-              Join using {referrerName}’s referral code{" "}
-              <span data-testid={isIos ? undefined : "referral-landing-code"}>{referralState.code}</span>. Complete a
-              qualifying transfer over {floorFormatted.fullText}
-              {offer?.receive_currency ? ` to ${offer.receive_currency}` : ""} within {windowDays} days to receive{" "}
-              {rewardFormatted.fullText} in bonus credit. Bonuses are awarded according to the referral rules.
+              {showWelcomeReward ? (
+                <>
+                  Joining with {referrerName}’s referral code{" "}
+                  <span data-testid={isIos ? undefined : "referral-landing-code"}>{referralState.code}</span> adds{" "}
+                  {rewardFormatted.fullText} bonus credit on sign-up, redeemable on your first qualifying transfer of{" "}
+                  {floorFormatted.fullText}+{offer?.receive_currency ? ` to ${offer.receive_currency}` : ""} within{" "}
+                  {windowDays} days. Bonuses are awarded according to the referral rules.
+                </>
+              ) : (
+                <>
+                  Join using {referrerName}’s referral code{" "}
+                  <span data-testid={isIos ? undefined : "referral-landing-code"}>{referralState.code}</span> and
+                  complete a qualifying transfer of {floorFormatted.fullText}+
+                  {offer?.receive_currency ? ` to ${offer.receive_currency}` : ""} within {windowDays} days. Bonuses are
+                  awarded according to the referral rules.
+                </>
+              )}
             </p>
           </details>
         </div>

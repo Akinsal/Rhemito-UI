@@ -26,7 +26,7 @@ import BonusAndDiscounts from "@/pages/BonusAndDiscounts";
 import ReferralLanding from "@/pages/ReferralLanding";
 import { ReferEarnCard } from "@/components/rewards/ReferEarnCard";
 import { ReferralCodeField } from "@/components/rewards/ReferralSignup";
-import { REFERRAL_CODE_RE, clearReferral, loadReferral, saveReferral, type MyReferral, type RewardOffer, buildReferralShareMessage, buildReferralShareTitle } from "@/lib/rewards";
+import { REFERRAL_CODE_RE, clearReferral, loadReferral, saveReferral, type MyReferral, type RewardOffer, buildReferralShareMessage, buildReferralShareTitle, referralHelpText } from "@/lib/rewards";
 import { userInitials, welcomeName } from "@/lib/userDisplay";
 
 let ctx: ContractApp;
@@ -1064,5 +1064,40 @@ describe("Who is signed in", () => {
       expect(source(f), `${f} must not contain a hard-coded customer name`).not.toMatch(names);
     }
     expect(source("client/src/pages/Dashboard.tsx")).not.toMatch(/Welcome\s+[A-Z][a-z]+(?![a-zA-Z{])/);
+  });
+
+  rule("REF-24", "Referee welcome bonus on joining via link, 3-step strip copy, referral code hook, and dashboard single-line nowrap (DEC-2026-11-16-REFEREE-SIGNUP-BONUS)", {
+    why: "Mohammad approved that referee welcome credit is added on joining via link, the 3-step strip displays Join · Send {floor}+ · {referrer} gets reward, the sign-up referral-code-hook explains both rewards, referralHelpText shows 'Waiting for their first successful transfer of...', and Dashboard welcome bonus earned pill remains on one line.",
+    fix: "ReferralSignup.tsx (ReferralInviteStrip, ReferralCodeField), lib/rewards.ts (referralHelpText), and Dashboard.tsx (referral-bonus-earned-pill whitespace-nowrap).",
+    where: ["client/src/components/rewards/ReferralSignup.tsx", "client/src/lib/rewards.ts", "client/src/pages/Dashboard.tsx"],
+  }, () => {
+    // 1. ReferralInviteStrip & ReferralCodeField static checks
+    const signupSrc = source("client/src/components/rewards/ReferralSignup.tsx");
+    expect(signupSrc).toContain("{name} invited you");
+    expect(signupSrc).toContain("bonus credit on joining via link.");
+    expect(signupSrc).toContain("welcome bonus credit");
+    expect(signupSrc).toContain("added automatically when you sign up using the link");
+    expect(signupSrc).toContain('You get {formatMoney(offer.referee_reward, offer.currency)} on sign-up');
+    expect(signupSrc).toContain('gets ${formatMoney(offer.referrer_reward, offer.currency)} on your first successful transaction');
+
+    // 2. referralHelpText unit assertion
+    const now = new Date("2026-10-01T00:00:00Z");
+    const fakeRef: MyReferral = {
+      id: "R1",
+      friend: "Alice M.",
+      joined_on: "2026-09-20T10:00:00Z",
+      status: "REGISTERED",
+      status_label: "Joined",
+      currency: "GBP",
+      floor: 50,
+      qualification_deadline: "2026-10-29",
+      reward: 10,
+      credited: 0,
+    };
+    expect(referralHelpText(fakeRef, now)).toBe("Waiting for their first successful transfer of £50.00 or more · 28 days left");
+
+    // 3. Dashboard whitespace-nowrap check
+    const dashSrc = source("client/src/pages/Dashboard.tsx");
+    expect(dashSrc).toMatch(/data-testid="referral-bonus-earned-pill"[^>]*whitespace-nowrap/);
   });
 });

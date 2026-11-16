@@ -46,12 +46,21 @@ export function ReferralInviteStrip({
   return (
     <section aria-label="Your welcome bonus" data-testid="referral-invite" className="mb-4 flex flex-col gap-3.5 rounded-2xl border border-slate-200 bg-white p-4">
       <p className="text-[15px] leading-[22px] text-slate-800">
-        <strong className="text-slate-900">{name} invited you</strong> – get {reward} bonus credit in 3 steps.
+        <strong className="text-slate-900">{name} invited you</strong> – get {reward} bonus credit on joining via link.
       </p>
       <ol className="grid grid-cols-3 gap-1.5">
         <li className="flex flex-col gap-1.5"><span className="h-1.5 rounded-full bg-primary" /><span className="text-xs font-semibold text-blue-700">Join</span></li>
-        <li className="flex flex-col gap-1.5"><span className="h-1.5 rounded-full bg-slate-200" /><span className="text-xs text-slate-600">Send {floor}+{offer.receive_currency ? ` to ${offer.receive_currency}` : ""} in {offer.qualification_window_days} days</span></li>
-        <li className="flex flex-col gap-1.5"><span className="h-1.5 rounded-full bg-slate-200" /><span className="text-xs text-slate-600">Get {reward}</span></li>
+        {offer.reward_type === "BOTH" && Number(offer.referrer_reward) > 0 ? (
+          <>
+            <li className="flex flex-col gap-1.5"><span className="h-1.5 rounded-full bg-slate-200" /><span className="text-xs text-slate-600">Send {floor}+{offer.receive_currency ? ` to ${offer.receive_currency}` : ""} in {offer.qualification_window_days} days</span></li>
+            <li className="flex flex-col gap-1.5"><span className="h-1.5 rounded-full bg-slate-200" /><span className="text-xs text-slate-600">{name} gets {formatMoney(offer.referrer_reward, offer.currency)}</span></li>
+          </>
+        ) : (
+          <>
+            <li className="flex flex-col gap-1.5"><span className="h-1.5 rounded-full bg-slate-200" /><span className="text-xs text-slate-600">Get {reward} on sign-up</span></li>
+            <li className="flex flex-col gap-1.5"><span className="h-1.5 rounded-full bg-slate-200" /><span className="text-xs text-slate-600">Send {floor}+{offer.receive_currency ? ` to ${offer.receive_currency}` : ""} in {offer.qualification_window_days} days</span></li>
+          </>
+        )}
       </ol>
       <div
         data-testid="referral-invite-why-register"
@@ -76,7 +85,7 @@ export function ReferralInviteStrip({
           <li className="flex items-start gap-1.5">
             <Check className="h-3.5 w-3.5 text-teal-600 shrink-0 mt-0.5" strokeWidth={2.5} />
             <span>
-              <strong className="text-slate-900">{reward} welcome bonus credit</strong> added automatically when your first {floor}+ transfer completes
+              <strong className="text-slate-900">{reward} welcome bonus credit</strong> added automatically when you sign up using the link
             </span>
           </li>
         </ul>
@@ -86,7 +95,7 @@ export function ReferralInviteStrip({
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Other send currencies</p>
           {otherOffers.map((o) => (
             <p key={`${o.rule_id}-${o.currency}`} className="text-xs text-slate-600">
-              <strong className="text-slate-800">{o.currency}:</strong> Get <strong>{formatMoney(o.referee_reward, o.currency)}</strong> bonus credit when you send <strong>{formatMoney(o.floor, o.currency)}+</strong> in {o.qualification_window_days} days.
+              <strong className="text-slate-800">{o.currency}:</strong> Get <strong>{formatMoney(o.referee_reward, o.currency)}</strong> bonus credit on sign-up — redeem on your first <strong>{formatMoney(o.floor, o.currency)}+</strong>{o.receive_currency ? ` to ${o.receive_currency}` : ""} transfer in {o.qualification_window_days} days.
             </p>
           ))}
         </div>
@@ -183,8 +192,8 @@ export function ReferralCodeField({ referral, onChange }: ReferralCodeFieldProps
           {referral.referrerFirstName && <span className="block text-xs text-teal-700">Code applied – invited by {referral.referrerFirstName}</span>}
           {hasHook && offer && (
             <span className="mt-0.5 block text-xs font-semibold text-indigo-700" data-testid="referral-code-hook">
-              You get {formatMoney(offer.referee_reward, offer.currency)} on your first {offer.currency} transfer above {formatMoney(offer.floor, offer.currency)}
-              {offer.reward_type === "BOTH" && offer.referrer_reward > 0 ? ` (${referral.referrerFirstName || "your friend"} gets ${formatMoney(offer.referrer_reward, offer.currency)})` : ""}
+              You get {formatMoney(offer.referee_reward, offer.currency)} on sign-up
+              {offer.reward_type === "BOTH" && offer.referrer_reward > 0 ? ` (${referral.referrerFirstName || "your friend"} gets ${formatMoney(offer.referrer_reward, offer.currency)} on your first successful transaction)` : ""}
             </span>
           )}
         </span>

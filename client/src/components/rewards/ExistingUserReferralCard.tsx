@@ -315,10 +315,11 @@ export function ExistingUserReferralCard({
             <p className="mt-2.5 text-xs sm:text-[13px] leading-relaxed text-slate-700">
               While you can&apos;t claim a new-starter link, you can share{" "}
               <strong className="text-slate-900">your own personal referral link</strong> with friends and family. When a
-              friend joins with your link and sends <strong className="text-slate-900">{floorText} or more</strong>
+              friend joins with your link and completes their first successful transfer of{" "}
+              <strong className="text-slate-900">{floorText} or more</strong>
               {corridorText} within <strong className="text-slate-900">{windowDays} days</strong>, you earn{" "}
               <strong className="text-slate-900">{referrerRewardText}</strong> in bonus credit
-              {refereeReward > 0 ? ` (and your friend gets ${refereeRewardText} too!)` : ""}.
+              {activeOffer?.reward_type !== "REFERRER" && refereeReward > 0 ? ` (and your friend gets ${refereeRewardText} on sign-up!)` : ""}.
             </p>
 
             {allCurrencyOffers.length > 1 && (
