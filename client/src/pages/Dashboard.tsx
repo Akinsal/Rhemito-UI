@@ -25,6 +25,12 @@ import { invoiceListUrl, resendInvoiceNotificationRequest, type InvoiceListItem,
 import { fetchCampaigns } from "@/lib/groupPay";
 import { cancelSendMoneyTransaction, getSendMoneyTransactions, toSendMoneyRow } from "@/lib/sendMoney";
 import {
+  DEMO_GBP_COLLECTION_BALANCE,
+  DEMO_GBP_TOTAL_SENT,
+  DEMO_GBP_WALLET_BALANCE,
+  formatAccountAmount,
+} from "@/data/collectionAccounts";
+import {
   TYPE_BADGES,
   fromCampaign,
   fromInvoice,
@@ -958,14 +964,18 @@ export default function Dashboard() {
   }, [sendMoneyQuery.data, requestsQuery.data, invoicesQuery.data, campaignsQuery.data, isDemoUser]);
 
   const totalSentFormatted = useMemo(() => {
-    if (isDemoUser) return "750,895.75";
+    if (isDemoUser) return formatAccountAmount(DEMO_GBP_TOTAL_SENT);
     const totalSentMajor = (sendMoneyQuery.data ?? [])
       .filter((tx) => tx.status === "completed")
       .reduce((sum, tx) => sum + Number(tx.sendAmount || 0), 0);
-    return totalSentMajor.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return formatAccountAmount(totalSentMajor);
   }, [isDemoUser, sendMoneyQuery.data]);
-  const walletBalanceFormatted = isDemoUser ? "253,007.92" : "0.00";
-  const collectionBalanceFormatted = isDemoUser ? "4,357,384.08" : "0.00";
+  const walletBalanceFormatted = isDemoUser
+    ? formatAccountAmount(DEMO_GBP_WALLET_BALANCE)
+    : "0.00";
+  const collectionBalanceFormatted = isDemoUser
+    ? formatAccountAmount(DEMO_GBP_COLLECTION_BALANCE)
+    : "0.00";
 
   const searchLower = search.trim().toLowerCase();
   const searchedRows = useMemo(() => {
@@ -1167,23 +1177,23 @@ export default function Dashboard() {
           onView={viewReferOffer}
         />
 
-        {/* Account Summary Section — 3 Clean White Cards matching Figma 12498:26082 */}
+        {/* Account Summary Section — 3 Pastel Cards matching Rhemito Reference Palette */}
         <motion.div variants={itemVariants} data-testid="section-account-summary">
-          <h2 className="text-base font-semibold text-[#323130] tracking-tight mb-3">
+          <h2 className="text-xl font-bold text-[#323130] tracking-tight mb-3">
             Account Summary
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Total Sent Card */}
-            <div className="rounded-lg bg-white p-4 flex flex-col justify-between min-h-[82px]">
-              <span className="text-xs font-normal text-[#323130]">
+            <div className="rounded-xl bg-[#FFEDE7] px-5 py-4 flex flex-col justify-between min-h-[82px]">
+              <span className="text-xs font-normal text-[#605E5C]">
                 Total sent
               </span>
               <div className="flex items-center justify-between gap-2 mt-2">
-                <span data-testid="summary-total-sent" className="text-xl font-semibold text-[#323130] tracking-tight whitespace-nowrap tabular-nums">
+                <span data-testid="summary-total-sent" className="text-xl font-bold text-[#605E5C] tracking-tight whitespace-nowrap tabular-nums">
                   {totalSentFormatted}
                 </span>
                 <Select defaultValue="GBP">
-                  <SelectTrigger className="h-7 w-[76px] rounded-full text-xs bg-white border border-[#d2d0ce] shadow-none font-semibold text-[#323130] px-2.5">
+                  <SelectTrigger className="h-7 w-[76px] rounded-full text-xs bg-white border border-[#d2d0ce] shadow-none font-medium text-[#323130] px-2.5">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1194,42 +1204,76 @@ export default function Dashboard() {
             </div>
 
             {/* Wallet Balance Card */}
-            <div className="rounded-lg bg-white p-4 flex flex-col justify-between min-h-[82px]">
-              <span className="text-xs font-normal text-[#323130]">
+            <div
+              role="button"
+              tabIndex={0}
+              data-testid="card-wallet-balance"
+              onClick={() => setLocation("/overview/collectionaccount?tab=wallet")}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setLocation("/overview/collectionaccount?tab=wallet");
+                }
+              }}
+              className="rounded-xl bg-[#E5F1FE] px-5 py-4 flex flex-col justify-between min-h-[82px] cursor-pointer transition-shadow hover:shadow-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2e5bff]"
+            >
+              <span className="text-xs font-normal text-[#605E5C]">
                 Wallet Balance
               </span>
               <div className="flex items-center justify-between gap-2 mt-2">
-                <span data-testid="summary-wallet-balance" className="text-xl font-semibold text-[#323130] tracking-tight whitespace-nowrap tabular-nums">
+                <span data-testid="summary-wallet-balance" className="text-xl font-bold text-[#605E5C] tracking-tight whitespace-nowrap tabular-nums">
                   {walletBalanceFormatted}
                 </span>
-                <Select defaultValue="GBP">
-                  <SelectTrigger className="h-7 w-[76px] rounded-full text-xs bg-white border border-[#d2d0ce] shadow-none font-semibold text-[#323130] px-2.5">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="GBP">GBP</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                >
+                  <Select defaultValue="GBP">
+                    <SelectTrigger className="h-7 w-[76px] rounded-full text-xs bg-white border border-[#d2d0ce] shadow-none font-medium text-[#323130] px-2.5">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="GBP">GBP</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
 
             {/* Collection Account Card */}
-            <div className="rounded-lg bg-white p-4 flex flex-col justify-between min-h-[82px]">
-              <span className="text-xs font-normal text-[#323130]">
+            <div
+              role="button"
+              tabIndex={0}
+              data-testid="card-collection-account"
+              onClick={() => setLocation("/overview/collectionaccount")}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setLocation("/overview/collectionaccount");
+                }
+              }}
+              className="rounded-xl bg-[#E0EED6] px-5 py-4 flex flex-col justify-between min-h-[82px] cursor-pointer transition-shadow hover:shadow-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2e5bff]"
+            >
+              <span className="text-xs font-normal text-[#605E5C]">
                 Collection Account
               </span>
               <div className="flex items-center justify-between gap-2 mt-2">
-                <span data-testid="summary-collection-account" className="text-xl font-semibold text-[#323130] tracking-tight whitespace-nowrap tabular-nums">
+                <span data-testid="summary-collection-account" className="text-xl font-bold text-[#605E5C] tracking-tight whitespace-nowrap tabular-nums">
                   {collectionBalanceFormatted}
                 </span>
-                <Select defaultValue="GBP">
-                  <SelectTrigger className="h-7 w-[76px] rounded-full text-xs bg-white border border-[#d2d0ce] shadow-none font-semibold text-[#323130] px-2.5">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="GBP">GBP</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                >
+                  <Select defaultValue="GBP">
+                    <SelectTrigger className="h-7 w-[76px] rounded-full text-xs bg-white border border-[#d2d0ce] shadow-none font-medium text-[#323130] px-2.5">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="GBP">GBP</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
           </div>

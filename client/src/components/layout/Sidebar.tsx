@@ -1,6 +1,6 @@
-import { useRewards } from "@/hooks/use-rewards";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, getQueryFn, queryClient } from "@/lib/queryClient";
 import { resetDeviceId } from "@/lib/deviceId";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -8,7 +8,7 @@ import {
   BarChart2,
   Users,
   User,
-  ShieldCheck,
+  IdCard,
   LifeBuoy,
   Settings,
   LogOut,
@@ -28,20 +28,21 @@ interface NavItemData {
   label: string;
   href: string;
   enabled: boolean;
+  filledIcon?: boolean;
   tooltip?: string;
 }
 
 /** Approved Rhemito retail sidebar order (Reward$ after Transactions). */
 const navItems: NavItemData[] = [
-  { icon: LayoutDashboard, label: "Overview", href: "/", enabled: true },
+  { icon: LayoutDashboard, label: "Overview", href: "/", enabled: true, filledIcon: true },
   { icon: BarChart2, label: "Transactions", href: "/transactions", enabled: true },
   { icon: Gift, label: "Reward$", href: "/bonus-discounts", enabled: true },
-  { icon: User, label: "Recipients", href: "/senders-recipients", enabled: true },
-  { icon: Users, label: "Senders", href: "/senders-recipients", enabled: true },
-  { icon: ShieldCheck, label: "Compliance", href: "/compliance", enabled: true },
+  { icon: User, label: "Recipients", href: "/senders-recipients", enabled: true, filledIcon: true },
+  { icon: Users, label: "Senders", href: "/senders-recipients", enabled: true, filledIcon: true },
+  { icon: IdCard, label: "Compliance", href: "/compliance", enabled: true },
   { icon: LifeBuoy, label: "Support", href: "/support", enabled: true },
   { icon: Newspaper, label: "MitoView", href: "/mitoview", enabled: true },
-  { icon: Bell, label: "Notifications", href: "/notifications/archive", enabled: true },
+  { icon: Bell, label: "Notifications", href: "/notifications/archive", enabled: true, filledIcon: true },
   { icon: Settings, label: "Settings", href: "/settings", enabled: true },
 ];
 
@@ -59,12 +60,12 @@ export function Sidebar({
   onToggleCollapse,
 }: SidebarProps) {
   const [location, setLocation] = useLocation();
-  const rewards = useRewards();
-  const rewardsWaiting = Boolean(
-    rewards.data &&
-      (rewards.data.wallet.balances.some((b) => b.available > 0) ||
-        rewards.data.latestOffer)
-  );
+  const { data: unreadCountData } = useQuery<{ count: number } | null>({
+    queryKey: ["/api/notifications/unread-count"],
+    queryFn: getQueryFn<{ count: number }>({ on401: "returnNull" }),
+    staleTime: 30_000,
+  });
+  const unreadNotifications = unreadCountData?.count ?? 0;
   const { toast } = useToast();
 
   const handleLogout = async () => {
@@ -91,47 +92,51 @@ export function Sidebar({
     className?: string;
     isCollapsed: boolean;
   }) => {
+    const isOverview = item.href === "/";
     const isReward = item.href === "/bonus-discounts";
+    const isNotifications = item.href === "/notifications/archive";
     const isActive =
       location === item.href ||
-      (item.href !== "/" && location.startsWith(item.href)) ||
+      (isOverview && location.startsWith("/overview")) ||
+      (!isOverview && location.startsWith(item.href)) ||
       (isReward && location.startsWith("/rewards"));
 
     const content = (
       <div
         className={cn(
-          "flex items-center gap-3.5 rounded-lg px-4 py-2.5 text-[14px] transition-all duration-150",
+          "flex items-center gap-5 rounded-lg px-5 py-3 text-[15px] transition-colors duration-150",
           !item.enabled && "cursor-not-allowed opacity-50",
           item.enabled && "cursor-pointer",
           isCollapsed && "justify-center px-2",
           isActive
-            ? "bg-[#e8f0fe]/90 font-semibold text-[#2e5bff]"
-            : "font-medium text-[#605e5c] hover:bg-blue-50/60 hover:text-[#2e5bff]",
+            ? "font-medium text-[#2e5bff]"
+            : "font-normal text-[#605e5c] hover:bg-slate-50 hover:text-[#2e5bff]",
           className
         )}
         data-testid={`link-${item.label.toLowerCase().replace(/\$/g, "").replace(/\s+/g, "-")}`}
       >
         <item.icon
+          fill={item.filledIcon ? "currentColor" : "none"}
+          strokeWidth={item.label === "Transactions" ? 2.5 : 1.9}
           className={cn(
-            "h-[18px] w-[18px] shrink-0 transition-colors",
-            isActive ? "text-[#2e5bff]" : "text-[#8a8886] group-hover:text-[#2e5bff]"
+            "h-[19px] w-[19px] shrink-0 transition-colors",
+            isActive ? "text-[#2e5bff]" : "text-[#4a4a4a] group-hover:text-[#2e5bff]"
           )}
         />
         {!isCollapsed && (
-          <div className="min-w-0 flex-1">
-            <span className="block truncate">{item.label}</span>
-            {isReward && rewardsWaiting && (
-              <span className="text-[10px] font-medium text-[#2e5bff]/80">
-                Rewards waiting!
+          <div className="flex min-w-0 flex-1 items-center gap-4">
+            <span className="truncate">{item.label}</span>
+            {isNotifications && unreadNotifications > 0 && (
+              <span
+                className="relative inline-flex shrink-0 items-center justify-center pt-1 pr-2"
+                data-testid="sidebar-notifications-badge"
+              >
+                <Bell className="h-[18px] w-[18px] fill-[#605e5c] text-[#605e5c]" />
+                <span className="absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#e84545] px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white">
+                  {unreadNotifications > 99 ? "99+" : unreadNotifications}
+                </span>
               </span>
             )}
-          </div>
-        )}
-        {isReward && rewardsWaiting && !isCollapsed && (
-          <div className="flex items-center gap-1" data-testid="rewards-waiting-badge">
-            <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white shadow-2xs">
-              NEW
-            </span>
           </div>
         )}
       </div>
@@ -161,7 +166,7 @@ export function Sidebar({
   const renderNavList = (isMobileDrawer: boolean) => {
     const isCollapsed = !isMobileDrawer && collapsed;
     return (
-      <nav className="flex-1 space-y-1.5 overflow-y-auto px-3 py-5">
+      <nav className="flex-1 space-y-1 overflow-y-auto px-2 pb-5 pt-1">
         {navItems.map((item) => (
           <NavItem key={`${item.label}-${item.href}`} item={item} isCollapsed={isCollapsed} />
         ))}
@@ -169,13 +174,13 @@ export function Sidebar({
         <button
           type="button"
           className={cn(
-            "flex w-full cursor-pointer items-center gap-3.5 rounded-lg px-4 py-2.5 text-[14px] font-medium text-[#605e5c] transition-all duration-150 hover:bg-red-50/60 hover:text-red-600",
+            "flex w-full cursor-pointer items-center gap-5 rounded-lg px-5 py-3 text-[15px] font-normal text-[#323130] transition-colors duration-150 hover:bg-red-50/60 hover:text-red-600",
             isCollapsed && "justify-center px-2"
           )}
           data-testid="button-logout"
           onClick={handleLogout}
         >
-          <LogOut className="h-[18px] w-[18px] shrink-0 text-[#8a8886]" />
+          <LogOut className="h-[19px] w-[19px] shrink-0 text-[#4a4a4a]" strokeWidth={1.9} />
           {!isCollapsed && <span>Logout</span>}
         </button>
       </nav>
@@ -186,23 +191,30 @@ export function Sidebar({
     <>
       <aside
         className={cn(
-          "fixed left-0 top-16 z-30 hidden h-[calc(100vh-4rem)] flex-col border-r border-[#f1f5f7] bg-[#f9fcff] transition-all duration-300 lg:flex",
+          "fixed left-0 top-16 z-30 hidden h-[calc(100vh-4rem)] flex-col border-r border-[#f1f5f7] bg-white transition-all duration-300 lg:flex",
           collapsed ? "w-20" : "w-60"
         )}
       >
         {onToggleCollapse && (
-          <button
-            type="button"
-            onClick={onToggleCollapse}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="absolute -right-3.5 top-7 z-40 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-[#2e5bff] text-white shadow-md transition-colors hover:bg-blue-700"
-          >
-            {collapsed ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
-              <ChevronLeft className="h-4 w-4" />
+          <div
+            className={cn(
+              "flex items-center pt-3 pb-1",
+              collapsed ? "justify-center px-2" : "justify-end px-4"
             )}
-          </button>
+          >
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-[#2e5bff] text-white transition-colors hover:bg-blue-700"
+            >
+              {collapsed ? (
+                <ChevronRight className="h-4 w-4 stroke-[2.25]" />
+              ) : (
+                <ChevronLeft className="h-4 w-4 stroke-[2.25]" />
+              )}
+            </button>
+          </div>
         )}
         {renderNavList(false)}
       </aside>
@@ -222,7 +234,7 @@ export function Sidebar({
               animate={{ x: 0 }}
               exit={{ x: -280 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="fixed left-0 top-0 z-50 flex h-screen w-72 flex-col bg-[#f9fcff] shadow-2xl lg:hidden"
+              className="fixed left-0 top-0 z-50 flex h-screen w-72 flex-col bg-white shadow-2xl lg:hidden"
             >
               <div className="flex items-center justify-between border-b border-[#f1f5f7] bg-white p-4">
                 <div className="flex items-center gap-2.5">

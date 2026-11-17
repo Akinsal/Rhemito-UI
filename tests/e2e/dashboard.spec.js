@@ -135,4 +135,77 @@ test.describe('Rhemito Dashboard', () => {
         await expect(rows).toHaveCount(20);
     });
 
+    test('Account Summary uses reference pastel scheme, bold heading, and clean Reward$ sidebar item', async ({ page }) => {
+        await page.goto('/');
+
+        const summarySection = page.getByTestId('section-account-summary');
+        await expect(summarySection).toBeVisible();
+
+        const heading = summarySection.getByRole('heading', { name: 'Account Summary' });
+        await expect(heading).toHaveCSS('font-weight', '700');
+
+        // Verify exact reference pastel backgrounds (#FFEDE7, #E5F1FE, #E0EED6)
+        const totalSentCard = summarySection.locator('> div > div').first();
+        await expect(totalSentCard).toHaveCSS('background-color', 'rgb(255, 237, 231)');
+        await expect(page.getByTestId('card-wallet-balance')).toHaveCSS('background-color', 'rgb(229, 241, 254)');
+        await expect(page.getByTestId('card-collection-account')).toHaveCSS('background-color', 'rgb(224, 238, 214)');
+
+        // Verify 'NEW' tag and 'Rewards waiting!' subtext are removed from Sidebar Reward$
+        await expect(page.getByTestId('rewards-waiting-badge')).toHaveCount(0);
+        await expect(page.getByText('Rewards waiting!')).toHaveCount(0);
+    });
+
+    test('Wallet Balance and Collection Account cards open /overview/collectionaccount tabs cleanly', async ({ page }) => {
+        await page.goto('/');
+
+        // Interacting with GBP currency selector inside Wallet Balance card does NOT navigate away
+        const walletCard = page.getByTestId('card-wallet-balance');
+        await walletCard.getByRole('combobox').click();
+        await expect(page).toHaveURL('/');
+        await page.keyboard.press('Escape');
+
+        // Clicking Wallet Balance card opens /overview/collectionaccount?tab=wallet on Wallets tab
+        await walletCard.click();
+        await expect(page).toHaveURL(/\/overview\/collectionaccount\?tab=wallet$/);
+        await expect(page.getByTestId('heading-collection-account')).toHaveText('Collection Account');
+        await expect(page.getByTestId('panel-wallets')).toBeVisible();
+        await expect(page.getByTestId('wallet-details-heading')).toHaveText('Below Are The Details Of Your GBP Wallet');
+        await expect(page.getByTestId('wallet-detail-balance')).toContainText('GBP 253,007.92');
+        await expect(page.getByTestId('wallet-detail-amount-sent')).toContainText('GBP 750,895.75');
+        await expect(page.getByTestId('wallet-detail-tx-count')).toHaveText('89');
+
+        // Switching wallet currency updates right panel
+        await page.getByTestId('wallet-currency-ngn').click();
+        await expect(page.getByTestId('wallet-details-heading')).toHaveText('Below Are The Details Of Your NGN Wallet');
+        await expect(page.getByTestId('wallet-detail-balance')).toHaveText('NGN 0.00');
+
+        // Switching to Collection Accounts tab updates URL & shows bank details
+        await page.getByTestId('tab-collection-accounts').click();
+        await expect(page).toHaveURL(/\/overview\/collectionaccount$/);
+        await expect(page.getByTestId('panel-collection-accounts')).toBeVisible();
+        await expect(page.getByTestId('collection-details-heading')).toHaveText(
+            'Below Are The Details Of Your British Pounds Payments Account'
+        );
+        await expect(page.getByText('The Currency Cloud Limited')).toBeVisible();
+
+        // Switching collection currency to USD updates right panel
+        await page.getByTestId('collection-currency-usd').click();
+        await expect(page.getByTestId('collection-details-heading')).toHaveText(
+            'Below Are The Details Of Your US Dollars Payments Account'
+        );
+
+        // Back button returns to Dashboard Overview
+        await page.getByTestId('button-back-overview').click();
+        await expect(page).toHaveURL('/');
+
+        // Clicking Collection Account card on Dashboard opens /overview/collectionaccount directly
+        await page.getByTestId('card-collection-account').click();
+        await expect(page).toHaveURL(/\/overview\/collectionaccount$/);
+        await expect(page.getByTestId('panel-collection-accounts')).toBeVisible();
+
+        // View Transaction History navigates to /transactions
+        await page.getByTestId('link-view-transaction-history').click();
+        await expect(page).toHaveURL(/\/transactions/);
+    });
+
 });
