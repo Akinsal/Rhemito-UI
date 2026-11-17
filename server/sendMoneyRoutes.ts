@@ -45,6 +45,7 @@ import {
   getMitoWebhookInspectorLogs,
   getMitoWebhookUrl,
   initiateMitoHostedTransaction,
+  initiateMitoPlaidRetailCollection,
   isMitoRetailConfigured,
   lockMitoExchangeRate,
   recordMitoWebhookInspectorLog,
@@ -54,6 +55,8 @@ import {
   sendMitoTransaction,
   serviceToMitoCollectionMode,
   signMitoWebhookPayload,
+  syncMitoCardPaymentStatus,
+  syncMitoPlaidRetailPaymentStatus,
   toCountryIso3,
   verifyMitoWebhookSignature,
   type MitoSendMoneyPaymentMethod,
@@ -167,12 +170,73 @@ function notificationData(tx: SendMoneyTransaction) {
 }
 
 async function getOwnedTransaction(idOrReference: string, userId: string): Promise<SendMoneyTransaction> {
-  const direct = await storage.getSendMoneyTransactionById(idOrReference);
-  const tx = direct ?? (await storage.listSendMoneyTransactionsByOwner(userId)).find((t) => t.reference === idOrReference);
+  const clean = String(idOrReference || "").trim();
+  if (!clean) {
+    throw new SendMoneyError(404, "NOT_FOUND", "Transaction not found.");
+  }
+  const direct = await storage.getSendMoneyTransactionById(clean);
+  const tx =
+    direct ??
+    (await storage.listSendMoneyTransactionsByOwner(userId)).find(
+      (t) =>
+        t.reference === clean ||
+        t.reference === clean.replace(/-PBB-[A-Z0-9]+$/i, "") ||
+        Boolean(t.mitoTransactionId && String(t.mitoTransactionId).trim() === clean) ||
+        Boolean(t.mitoReference && String(t.mitoReference).trim() === clean) ||
+        Boolean(t.mitoPaymentReference && String(t.mitoPaymentReference).trim() === clean) ||
+        Boolean(
+          t.mitoPaymentSession &&
+            typeof (t.mitoPaymentSession as Record<string, unknown>).id === "string" &&
+            String((t.mitoPaymentSession as Record<string, unknown>).id).trim() === clean,
+        ),
+    );
   if (!tx || tx.ownerId !== userId) {
     throw new SendMoneyError(404, "NOT_FOUND", "Transaction not found.");
   }
   return tx;
+}
+
+async function resolveCheckoutPaymentIdFromTx(tx: SendMoneyTransaction): Promise<{
+  paymentId: string | null;
+  checkedLiveCko: boolean;
+  ckoOk: boolean;
+}> {
+  const psObj = tx.mitoPaymentSession as Record<string, unknown> | null | undefined;
+  const psId = String(psObj?.id || "").trim();
+  const psSecret = String(psObj?.payment_session_secret || "").trim();
+  const pubKey = String(
+    tx.mitoCheckoutPublicKey || "pk_sbox_hxdmemjidz7nf3sfukhia4igsuf",
+  ).trim();
+  const canVerifyLiveCko =
+    Boolean(psId && psSecret) &&
+    (!process.env.VITEST || process.env.CKO_ALLOW_IN_VITEST === "1");
+  if (!canVerifyLiveCko) {
+    return { paymentId: null, checkedLiveCko: false, ckoOk: false };
+  }
+  try {
+    const ckoRes = await fetch(
+      `https://api.sandbox.checkout.com/payment-sessions/${encodeURIComponent(psId)}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${pubKey}`,
+          "cko-payment-session-secret": psSecret,
+        },
+        signal: AbortSignal.timeout(6000),
+      },
+    );
+    const ckoBody = (await ckoRes.json().catch(() => null)) as Record<string, unknown> | null;
+    if (
+      ckoRes.ok &&
+      typeof ckoBody?.payment_id === "string" &&
+      ckoBody.payment_id.trim().startsWith("pay_")
+    ) {
+      return { paymentId: ckoBody.payment_id.trim(), checkedLiveCko: true, ckoOk: true };
+    }
+    return { paymentId: null, checkedLiveCko: true, ckoOk: ckoRes.ok };
+  } catch {
+    return { paymentId: null, checkedLiveCko: true, ckoOk: false };
+  }
 }
 
 export function registerSendMoneyRoutes(app: Express): void {
@@ -879,6 +943,7 @@ export function registerSendMoneyRoutes(app: Express): void {
       const rawUrl = String(req.body?.url || "").trim();
       const paymentId = String(req.body?.paymentId || "").trim();
       const sessionId = String(req.body?.sessionId || "").trim();
+      const txId = String(req.body?.txId || "").trim();
       const redirectReason = String(req.body?.redirectReason || "").trim();
 
       const extractOutcomeFromUrlString = (urlStr: string) => {
@@ -916,6 +981,7 @@ export function registerSendMoneyRoutes(app: Express): void {
           return {
             hostname: parsed.hostname.toLowerCase(),
             pathname: parsed.pathname,
+            txId: getParam("txId", "transactionId"),
             tnxref: getParam(
               "tnxref",
               "orderNo",
@@ -928,6 +994,8 @@ export function registerSendMoneyRoutes(app: Express): void {
             status: getParam("status", "orderStatus", "journeyStatus"),
             paymentStatus: getParam("paymentStatus", "cko-payment-status"),
             ckoSessionId: getParam("cko-session-id", "cko-payment-id"),
+            ckoPaymentId: getParam("cko-payment-id"),
+            cardRedirect: getParam("cardRedirect"),
             reason: getParam("reason", "error", "message", "declined_reason"),
             journeyCode: getParam("journeyCode", "journey_code"),
           };
@@ -947,10 +1015,13 @@ export function registerSendMoneyRoutes(app: Express): void {
           outcome = {
             hostname: info.hostname,
             pathname: info.pathname,
+            txId: info.txId || outcome?.txId || null,
             tnxref: info.tnxref || outcome?.tnxref || null,
             status: info.status || outcome?.status || null,
             paymentStatus: info.paymentStatus || outcome?.paymentStatus || null,
             ckoSessionId: info.ckoSessionId || outcome?.ckoSessionId || null,
+            ckoPaymentId: info.ckoPaymentId || outcome?.ckoPaymentId || null,
+            cardRedirect: info.cardRedirect || outcome?.cardRedirect || null,
             reason: info.reason || outcome?.reason || null,
             journeyCode: info.journeyCode || outcome?.journeyCode || null,
           };
@@ -982,10 +1053,13 @@ export function registerSendMoneyRoutes(app: Express): void {
               outcome = {
                 hostname: nextInfo.hostname,
                 pathname: nextInfo.pathname,
+                txId: nextInfo.txId || outcome?.txId || null,
                 tnxref: nextInfo.tnxref || outcome?.tnxref || null,
                 status: nextInfo.status || outcome?.status || null,
                 paymentStatus: nextInfo.paymentStatus || outcome?.paymentStatus || null,
                 ckoSessionId: nextInfo.ckoSessionId || outcome?.ckoSessionId || null,
+                ckoPaymentId: nextInfo.ckoPaymentId || outcome?.ckoPaymentId || null,
+                cardRedirect: nextInfo.cardRedirect || outcome?.cardRedirect || null,
                 reason: nextInfo.reason || outcome?.reason || null,
                 journeyCode: nextInfo.journeyCode || outcome?.journeyCode || null,
               };
@@ -1008,10 +1082,92 @@ export function registerSendMoneyRoutes(app: Express): void {
           ? "CANCELLED"
           : null);
 
+      let matchedTx: SendMoneyTransaction | null = null;
+      try {
+        const userId = requireStrictAuth(req);
+        const lookupKeys = [
+          txId,
+          outcome?.txId || "",
+          outcome?.tnxref || "",
+          outcome?.ckoSessionId || "",
+          outcome?.ckoPaymentId || "",
+          sessionId,
+          paymentId,
+        ]
+          .map((v) => String(v || "").trim())
+          .filter(Boolean);
+        for (const key of lookupKeys) {
+          try {
+            matchedTx = await getOwnedTransaction(key, userId);
+            if (matchedTx) break;
+          } catch {
+            // ignore 404 and try next key
+          }
+        }
+      } catch {
+        // unauthenticated or lookup error — proceed without matchedTx
+      }
+
+      let resolvedStatus = effectiveStatus;
+      let resolvedPaymentStatus = outcome?.paymentStatus || null;
+      let verifiedPaymentId: string | null = null;
+
+      if (
+        !resolvedStatus &&
+        !outcome?.reason &&
+        !(outcome?.hostname || "").endsWith("checkout.com") &&
+        matchedTx
+      ) {
+        if (matchedTx.status === "completed") {
+          resolvedStatus = "COMPSUCCESS";
+          resolvedPaymentStatus = "Captured";
+          verifiedPaymentId =
+            matchedTx.mitoPaymentReference || outcome?.ckoPaymentId || paymentId || null;
+        } else {
+          const ckoLookup = await resolveCheckoutPaymentIdFromTx(matchedTx);
+          const urlCkoCandidate = [
+            outcome?.ckoPaymentId || "",
+            paymentId,
+            outcome?.ckoSessionId || "",
+          ]
+            .map((v) => String(v || "").trim())
+            .find((v) => /^(pay_|sid_)/i.test(v));
+
+          if (ckoLookup.paymentId) {
+            verifiedPaymentId = ckoLookup.paymentId;
+          } else if ((!ckoLookup.checkedLiveCko || !ckoLookup.ckoOk) && urlCkoCandidate) {
+            verifiedPaymentId = urlCkoCandidate;
+          }
+
+          if (verifiedPaymentId) {
+            // Trigger Mito Staging's CheckoutPaymentSatus -> ProcessOrder(result.Id) so Mito
+            // marks the transaction PAID / AWAITINGPROCESSING / INREVIEW without redirecting the browser!
+            const mitoSynced = await syncMitoCardPaymentStatus(verifiedPaymentId);
+            if (mitoSynced?.status) {
+              resolvedStatus = mitoSynced.status;
+              resolvedPaymentStatus =
+                mitoSynced.paymentStatus ||
+                (mitoSynced.status === "COMPSUCCESS" ? "Captured" : null);
+            } else if (verifiedPaymentId.startsWith("pay_")) {
+              resolvedStatus = "COMPSUCCESS";
+              resolvedPaymentStatus = "Captured";
+            }
+          }
+        }
+      }
+
       return res.json({
-        tnxref: outcome?.tnxref || null,
-        status: effectiveStatus,
-        paymentStatus: outcome?.paymentStatus || null,
+        tnxref:
+          outcome?.tnxref ||
+          matchedTx?.mitoTransactionId ||
+          matchedTx?.mitoReference ||
+          matchedTx?.reference ||
+          null,
+        transactionId: matchedTx?.id || null,
+        reference: matchedTx?.reference || null,
+        paymentId: verifiedPaymentId || outcome?.ckoPaymentId || paymentId || null,
+        status: resolvedStatus,
+        paymentStatus: resolvedPaymentStatus,
         ckoSessionId: outcome?.ckoSessionId || sessionId || paymentId || null,
         reason: outcome?.reason || null,
         journeyCode: outcome?.journeyCode || null,
@@ -1684,10 +1840,67 @@ export function registerSendMoneyRoutes(app: Express): void {
         const origin =
           (req && typeof req.headers.origin === "string" && req.headers.origin) ||
           (req && req.get("host") ? `${req.protocol}://${req.get("host")}` : "http://localhost:5000");
-        const rawRedirectSuccessUrl = `${origin.replace(/\/+$/, "")}/send-money`;
-        const redirectSuccessUrl = /localhost|127\.0\.0\.1/i.test(rawRedirectSuccessUrl)
-          ? "https://rhemito-ui.onrender.com/send-money"
-          : rawRedirectSuccessUrl;
+        const cleanOrigin = origin.replace(/\/+$/, "");
+        const redirectSuccessUrl =
+          mitoPaymentMethod === "CARDCHECKOUT"
+            ? `${cleanOrigin}/send/status`
+            : /localhost|127\.0\.0\.1/i.test(cleanOrigin)
+              ? "https://rhemito-ui.onrender.com/send-money"
+              : `${cleanOrigin}/send-money`;
+
+        if (mitoPaymentMethod === "PLAID") {
+          const plaidRetail = await initiateMitoPlaidRetailCollection({
+            userId: mitoUserId,
+            beneficiaryId: mitoBeneficiaryId,
+            providerId: mitoProviderId,
+            rateId: mitoRateId,
+            commission: commissionNum,
+            serviceCode: "MONEYTRANSFER",
+            collectionMode,
+            sendCountryIso3,
+            receiveCountryIso3,
+            sendCurrency,
+            receiveCurrency,
+            sendAmount: sendAmountNum,
+            partnerReferenceNumber: tx.reference,
+            reasonCode: tx.reasonCode,
+            sourceOfFundCode: tx.sourceOfFundCode,
+            paymentNarration: tx.paymentNarration || "Money transfer",
+            redirectUrl: redirectSuccessUrl,
+            webhookUrl: getMitoWebhookUrl(),
+          });
+
+          const rawPlaidMsg = plaidRetail?.message ? String(plaidRetail.message).trim() : "";
+          const meaningfulPlaidMsg =
+            rawPlaidMsg &&
+            !/^HTTP\s+\d+$/i.test(rawPlaidMsg) &&
+            rawPlaidMsg.toLowerCase() !== "unknown"
+              ? rawPlaidMsg
+              : null;
+
+          return {
+            mitoUserId,
+            mitoProviderId,
+            ...(mitoProviderCode ? { mitoProviderCode } : {}),
+            mitoRateId,
+            mitoBeneficiaryId,
+            sendCountryIso3,
+            receiveCountryIso3,
+            ...(plaidRetail?.reference
+              ? { mitoTransactionId: plaidRetail.reference, mitoReference: plaidRetail.reference }
+              : {}),
+            ...(plaidRetail?.paymentUrl !== undefined ? { mitoPaymentUrl: plaidRetail.paymentUrl } : {}),
+            mitoPaymentSession: null,
+            ...(plaidRetail?.journeyCode !== undefined ? { mitoLinkToken: plaidRetail.journeyCode } : {}),
+            ...(plaidRetail?.partnerReferenceNumber
+              ? { mitoPaymentReference: plaidRetail.partnerReferenceNumber }
+              : {}),
+            ...(plaidRetail?.requestPayload ? { mitoHostedPayload: plaidRetail.requestPayload } : {}),
+            ...(plaidRetail?.ok === false
+              ? { _mitoGatewayMessage: meaningfulPlaidMsg || gatewayFailureMsg }
+              : {}),
+          };
+        }
 
         const sent = await sendMitoTransaction({
           userId: mitoUserId,
@@ -1980,7 +2193,10 @@ export function registerSendMoneyRoutes(app: Express): void {
           mitoSendPatch.mitoPaymentUrl,
       );
       const mitoPatch = {
-        ...(tx.mitoTransactionId || hasDirectGatewayTarget
+        ...(tx.mitoTransactionId ||
+        hasDirectGatewayTarget ||
+        parsed.data.paymentMethod === "instant_bank" ||
+        Boolean(mitoGatewayMessage)
           ? {}
           : await initiateHostedForSendMoneyTx(effectiveTx, userId, req)),
         ...mitoSendPatch,
@@ -1997,11 +2213,7 @@ export function registerSendMoneyRoutes(app: Express): void {
                 mitoPatch.mitoPaymentSession ||
                   (mitoPatch.mitoPaymentUrl && mitoPatch.mitoPaymentUrl.startsWith("http")),
               )
-            : Boolean(
-                (mitoPatch.mitoPaymentUrl && mitoPatch.mitoPaymentUrl.startsWith("http")) ||
-                  (mitoPatch.mitoHostedUrl && mitoPatch.mitoHostedUrl.startsWith("http")) ||
-                  (tx.mitoHostedUrl && tx.mitoHostedUrl.startsWith("http")),
-              );
+            : Boolean(mitoPatch.mitoPaymentUrl && mitoPatch.mitoPaymentUrl.startsWith("http"));
         if (!hasValidGatewayTarget) {
           if (promoAtPayment) await promo.releaseForPayment(tx.reference);
           if (bonusAtPayment) await bonus.releaseForPayment(userId, tx.reference);
@@ -2099,6 +2311,7 @@ export function registerSendMoneyRoutes(app: Express): void {
     paymentStatus: z.string().trim().max(120).optional(),
     paymentId: z.string().trim().max(160).optional(),
     sessionId: z.string().trim().max(160).optional(),
+    tnxref: z.string().trim().max(160).optional(),
     journeyCode: z.string().trim().max(160).optional(),
     reason: z.string().trim().max(500).optional(),
   });
@@ -2111,7 +2324,32 @@ export function registerSendMoneyRoutes(app: Express): void {
   app.post("/api/send-money/transactions/:id/confirm-gateway", async (req: Request, res: Response) => {
     try {
       const userId = requireStrictAuth(req);
-      const tx = await getOwnedTransaction(req.params.id, userId);
+      let tx: SendMoneyTransaction | undefined;
+      try {
+        tx = await getOwnedTransaction(req.params.id, userId);
+      } catch (err) {
+        if (!(err instanceof SendMoneyError && err.status === 404)) {
+          throw err;
+        }
+        const fallbackCandidates = [
+          typeof req.body?.tnxref === "string" ? req.body.tnxref.trim() : "",
+          typeof req.body?.sessionId === "string" ? req.body.sessionId.trim() : "",
+          typeof req.body?.paymentId === "string" ? req.body.paymentId.trim() : "",
+        ].filter(Boolean);
+        for (const candidate of fallbackCandidates) {
+          try {
+            tx = await getOwnedTransaction(candidate, userId);
+            break;
+          } catch (fallbackErr) {
+            if (!(fallbackErr instanceof SendMoneyError && fallbackErr.status === 404)) {
+              throw fallbackErr;
+            }
+          }
+        }
+        if (!tx) {
+          throw err;
+        }
+      }
       const parsed = confirmSendMoneyGatewaySchema.safeParse(req.body ?? {});
       if (!parsed.success) {
         throw new SendMoneyError(400, "VALIDATION_ERROR", firstZodMessage(parsed.error));
@@ -2127,13 +2365,46 @@ export function registerSendMoneyRoutes(app: Express): void {
         if (tx.status === "cancelled") {
           throw new SendMoneyError(409, "INVALID_STATE", "A cancelled transaction cannot be completed.");
         }
+
+        let effectivePaymentRef = paymentRef;
+        if (tx.paymentMethod === "card" && isMitoRetailConfigured()) {
+          const directCkoId = [paymentId || "", sessionId || ""]
+            .map((v) => v.trim())
+            .find((v) => /^(pay_|sid_)/i.test(v));
+          const resolvedPayId =
+            directCkoId || (await resolveCheckoutPaymentIdFromTx(tx)).paymentId;
+          if (resolvedPayId) {
+            effectivePaymentRef = paymentId || resolvedPayId;
+            await syncMitoCardPaymentStatus(resolvedPayId);
+          }
+        } else if (tx.paymentMethod === "instant_bank" && isMitoRetailConfigured()) {
+          const hostedPartnerRef =
+            typeof (tx.mitoHostedPayload as Record<string, unknown> | undefined)?.PartnerReferenceNumber === "string"
+              ? String((tx.mitoHostedPayload as Record<string, unknown>).PartnerReferenceNumber).trim()
+              : "";
+          const partnerRef =
+            hostedPartnerRef ||
+            (tx.mitoPaymentReference && tx.mitoPaymentReference.startsWith("TXN-")
+              ? tx.mitoPaymentReference.trim()
+              : "") ||
+            tx.reference;
+          const retailRef = tx.mitoReference || tx.mitoTransactionId || parsed.data.tnxref || null;
+          const syncedPlaid = await syncMitoPlaidRetailPaymentStatus({
+            partnerReferenceNumber: partnerRef,
+            retailReference: retailRef,
+          });
+          if (syncedPlaid?.reference && !effectivePaymentRef) {
+            effectivePaymentRef = syncedPlaid.partnerReferenceNumber || syncedPlaid.reference;
+          }
+        }
+
         const now = new Date();
         const updated =
           (await storage.updateSendMoneyTransaction(tx.id, {
             status: "completed",
             paidAt: tx.paidAt ?? now,
             ...(tx.promoCode ? { promoRedeemedAt: tx.promoRedeemedAt ?? now } : {}),
-            ...(paymentRef ? { mitoPaymentReference: paymentRef } : {}),
+            ...(effectivePaymentRef ? { mitoPaymentReference: effectivePaymentRef } : {}),
             mitoPaymentSession: null,
           })) ?? tx;
 
@@ -2391,10 +2662,16 @@ export function registerSendMoneyRoutes(app: Express): void {
       const paymentReference = String(data?.paymentReference || "").trim();
 
       if (!isKycEvent || partnerRef || transactionRef || paymentReference) {
+        const basePartnerRef = partnerRef ? partnerRef.replace(/-PBB-[A-Z0-9]+$/i, "") : "";
         const allTxs = [...(await storage.listAllSendMoneyTransactions())].reverse();
         matchedTransaction =
           (partnerRef
-            ? allTxs.find((t) => t.reference === partnerRef || t.id === partnerRef)
+            ? allTxs.find(
+                (t) =>
+                  t.reference === partnerRef ||
+                  (basePartnerRef && t.reference === basePartnerRef) ||
+                  t.id === partnerRef,
+              )
             : undefined) ??
           allTxs.find((t) => {
             if (
@@ -2413,10 +2690,15 @@ export function registerSendMoneyRoutes(app: Express): void {
 
         if (matchedTransaction) {
           const effectiveStatus = dataStatusLower || eventTypeLower;
+          const preserveExistingMitoTxId =
+            (effectiveStatus === "transaction_initiated" || effectiveStatus === "initiated") &&
+            Boolean(matchedTransaction.mitoTransactionId);
           const txPatch: Partial<Omit<SendMoneyTransaction, "id">> = {
             ...(transactionRef
               ? {
-                  mitoTransactionId: transactionRef,
+                  mitoTransactionId: preserveExistingMitoTxId
+                    ? matchedTransaction.mitoTransactionId
+                    : transactionRef,
                   mitoReference: matchedTransaction.mitoReference || transactionRef,
                 }
               : {}),
@@ -2435,7 +2717,15 @@ export function registerSendMoneyRoutes(app: Express): void {
             effectiveStatus === "paid" ||
             effectiveStatus === "successful" ||
             effectiveStatus === "settled" ||
-            effectiveStatus === "success"
+            effectiveStatus === "success" ||
+            (!isKycEvent &&
+              (effectiveStatus === "approved" ||
+                effectiveStatus === "authorized" ||
+                effectiveStatus === "captured" ||
+                effectiveStatus === "readytoprocess" ||
+                effectiveStatus === "ready_to_process" ||
+                effectiveStatus === "awaitingaffiliateupdate" ||
+                effectiveStatus === "awaiting_affiliate_update"))
           ) {
             const wasCompleted = matchedTransaction.status === "completed";
             const now = new Date();

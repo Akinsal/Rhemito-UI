@@ -577,6 +577,7 @@ export interface ConfirmGatewayInput {
   paymentStatus?: string;
   paymentId?: string;
   sessionId?: string;
+  tnxref?: string;
   journeyCode?: string;
   reason?: string;
 }
@@ -589,6 +590,7 @@ export async function confirmSendMoneyGateway(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
+    keepalive: true,
     body: JSON.stringify(input),
   });
   const json = await res.json().catch(() => ({}));
