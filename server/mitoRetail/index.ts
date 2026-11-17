@@ -2170,6 +2170,7 @@ export async function initiateMitoHostedTransaction(input: {
   paymentNarration: string;
   redirectUrl?: string;
   webhookUrl?: string;
+  preferredPaymentMethod?: string;
 }): Promise<{
   retailTransactionId?: string;
   reference?: string;
@@ -2227,6 +2228,9 @@ export async function initiateMitoHostedTransaction(input: {
   }
   if (typeof input.commission === "number" && Number.isFinite(input.commission)) {
     payload.commission = input.commission;
+  }
+  if (input.preferredPaymentMethod && input.preferredPaymentMethod.trim()) {
+    payload.PreferredPaymentMethod = input.preferredPaymentMethod.trim().toUpperCase();
   }
 
   const res = await fetch(`${creds.baseUrl}/api/v1/mito/Transactions/InitiateHostedTransaction`, {
@@ -2511,6 +2515,379 @@ export async function syncMitoCardPaymentStatus(ckoIdOrPaymentId: string): Promi
   } catch (err) {
     log(
       `ℹ️ Mito CheckoutPaymentSatus sync warning for ${cleanId}: ${(err as Error).message}`,
+      "mito-retail",
+    );
+    return null;
+  }
+}
+
+/**
+ * Initiates an Affiliate Pay By Bank (`PLAID`) RetailTransaction + `RetailCollection` (`journeyType: 4`)
+ * hosted journey in Mito Staging.
+ *
+ * Why this path is required for Affiliate (`1112`) Pay By Bank:
+ * - Calling `POST /api/v1/Transaction/SendMoney` with an Affiliate token sets `transaction.AffiliateId`,
+ *   and `furp02-core`'s `CheckoutTransactionWebhookSettlementService.ApplyPaymentCapturedAsync` exits early
+ *   whenever `transaction.AffiliateId.HasValue` is true — leaving Plaid `Transaction` rows permanently in
+ *   `AWAITINGPAYMENT`.
+ * - Creating a `RetailTransaction` (`InitiateHostedTransaction` with `PreferredPaymentMethod: "PLAID"`) paired
+ *   with a `RetailCollection` journey (`POST /api/v1/mito/Journey`, `journeyType: 4`, `paymentProviders: "PLAID"`)
+ *   opens the exact same `/retail-payment?journeyCode=JNY-...` Plaid modal while routing Plaid's settlement
+ *   webhook (`PlaidPaymentSourceType.Retail`) through `RetailAffiliatePaymentSettlementService`, which marks
+ *   the `RetailTransaction` `PAID` and migrates it into `dbo.Transactions`.
+ */
+export async function initiateMitoPlaidRetailCollection(input: {
+  userId: string;
+  beneficiaryId: string;
+  providerId: string;
+  rateId: string;
+  commission?: number;
+  serviceCode?: "MONEYTRANSFER" | "MOBILETOPUP" | "BILLPAYMENT" | string;
+  collectionMode: "BANKACCOUNT" | "MOBILEMONEY";
+  sendCountryIso3: string;
+  receiveCountryIso3: string;
+  sendCurrency: string;
+  receiveCurrency: string;
+  sendAmount: number;
+  partnerReferenceNumber: string;
+  reasonCode?: string | null;
+  sourceOfFundCode?: string | null;
+  paymentNarration?: string;
+  redirectUrl?: string;
+  webhookUrl?: string;
+}): Promise<{
+  ok: boolean;
+  retailTransactionId?: string;
+  reference?: string;
+  partnerReferenceNumber: string;
+  paymentUrl?: string | null;
+  journeyCode?: string | null;
+  qrCodeUrl?: string | null;
+  requestPayload?: Record<string, unknown>;
+  message?: string;
+} | null> {
+  if (!isMitoRetailConfigured()) return null;
+  const creds = loadMitoRetailCredentials()!;
+  const { token } = await getMitoRetailToken();
+  const effectiveUserId = (input.userId || DEFAULT_MITO_SENDER_USER_ID).trim();
+
+  // Ensure reasonCode and sourceOfFundCode are valid Mito lookup shortcodes (never GUIDs or UI labels)
+  // so `RetailToTransactionCommandHandler.CreateTransactionObjectAsync` (`GetSourceOfFunds` / `GetPurposeByCode`) succeeds.
+  let resolvedReasonCode = String(input.reasonCode || "").trim();
+  let resolvedSofCode = String(input.sourceOfFundCode || "").trim();
+  try {
+    const lookups = await getMitoLookupTypes("reason,source-of-funds");
+    const reasons = lookups.reason || [];
+    const matchedReason = reasons.find(
+      (r) =>
+        (r.code && r.code.toUpperCase() === resolvedReasonCode.toUpperCase()) ||
+        (r.id && r.id.toUpperCase() === resolvedReasonCode.toUpperCase()) ||
+        (r.name && r.name.toLowerCase() === resolvedReasonCode.toLowerCase()),
+    );
+    resolvedReasonCode =
+      matchedReason?.code ||
+      reasons[0]?.code ||
+      (/^[A-Z_]+$/i.test(resolvedReasonCode) ? resolvedReasonCode.toUpperCase() : "FOROWNEXPENDITURES");
+
+    const sofs = lookups.sourceOfFunds || [];
+    const matchedSof = sofs.find(
+      (s) =>
+        (s.code && s.code.toUpperCase() === resolvedSofCode.toUpperCase()) ||
+        (s.id && s.id.toUpperCase() === resolvedSofCode.toUpperCase()) ||
+        (s.name && s.name.toLowerCase() === resolvedSofCode.toLowerCase()),
+    );
+    resolvedSofCode =
+      matchedSof?.code ||
+      sofs[0]?.code ||
+      (/^[A-Z_]+$/i.test(resolvedSofCode) ? resolvedSofCode.toUpperCase() : "TRADING");
+  } catch {
+    if (!resolvedReasonCode || resolvedReasonCode.includes("-") || resolvedReasonCode.includes(" ")) {
+      resolvedReasonCode = "FOROWNEXPENDITURES";
+    }
+    if (!resolvedSofCode || resolvedSofCode.includes("-") || resolvedSofCode.includes(" ")) {
+      resolvedSofCode = "TRADING";
+    }
+  }
+
+  const basePartnerRef = String(input.partnerReferenceNumber || "").trim().replace(/-PBB-[A-Z0-9]+$/i, "");
+  const attemptSuffix = Date.now().toString(36).toUpperCase();
+  const uniquePartnerRef = `${basePartnerRef}-PBB-${attemptSuffix}`;
+
+  const rawReturnUrl = (input.redirectUrl || "https://rhemito-ui.onrender.com/send-money").trim();
+  const resolvedReturnUrl = /localhost|127\.0\.0\.1/i.test(rawReturnUrl)
+    ? "https://rhemito-ui.onrender.com/send-money"
+    : rawReturnUrl;
+
+  const initiated = await initiateMitoHostedTransaction({
+    userId: effectiveUserId,
+    beneficiaryId: input.beneficiaryId,
+    providerId: input.providerId,
+    rateId: input.rateId,
+    commission: input.commission,
+    serviceCode: input.serviceCode || "MONEYTRANSFER",
+    collectionMode: input.collectionMode,
+    sendCountryIso3: input.sendCountryIso3,
+    receiveCountryIso3: input.receiveCountryIso3,
+    sendCurrency: input.sendCurrency,
+    receiveCurrency: input.receiveCurrency,
+    sendAmount: input.sendAmount,
+    partnerReferenceNumber: uniquePartnerRef,
+    reasonCode: resolvedReasonCode,
+    sourceOfFundCode: resolvedSofCode,
+    paymentNarration: input.paymentNarration || "Money transfer",
+    redirectUrl: resolvedReturnUrl,
+    webhookUrl: input.webhookUrl || getMitoWebhookUrl(),
+    preferredPaymentMethod: "PLAID",
+  });
+
+  if (!initiated?.reference && !initiated?.retailTransactionId) {
+    return {
+      ok: false,
+      partnerReferenceNumber: uniquePartnerRef,
+      requestPayload: initiated?.requestPayload,
+      message: initiated?.message || "Failed to initiate Mito Retail Pay By Bank transaction.",
+    };
+  }
+
+  const retailRef = String(initiated.reference || "").trim();
+  const totalPayableAmount = Number(
+    (input.sendAmount + (typeof input.commission === "number" && Number.isFinite(input.commission) ? input.commission : 0)).toFixed(2),
+  );
+
+  // Mint a `RetailCollection` (`journeyType: 4`) journey bound to `uniquePartnerRef` so `/retail-payment`
+  // opens Plaid directly in our modal and resolves `PlaidPaymentSourceType.Retail` (zero TransactionNumber collision).
+  const journeyPayload = {
+    customerId: effectiveUserId,
+    journeyType: 4,
+    skipKyc: true,
+    partnerReferenceNumber: uniquePartnerRef,
+    reference: retailRef || uniquePartnerRef,
+    currency: input.sendCurrency.toUpperCase(),
+    amount: totalPayableAmount > 0 ? totalPayableAmount : input.sendAmount,
+    payingTo: "Rhemito",
+    paymentProviders: "PLAID",
+    returnUrl: resolvedReturnUrl,
+  };
+
+  const journeyRes = await fetch(`${creds.baseUrl}/api/v1/mito/Journey`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      apiKey: creds.apiKey,
+    },
+    body: JSON.stringify(journeyPayload),
+    signal: AbortSignal.timeout(15000),
+  });
+
+  const journeyBody = (await journeyRes.json().catch(() => ({}))) as {
+    data?: {
+      journeyId?: string | null;
+      journeyCode?: string | null;
+      hostedUrl?: string | null;
+      qrCodeUrl?: string | null;
+    };
+    message?: string;
+  };
+
+  const hostedPaymentUrl = journeyBody?.data?.hostedUrl || initiated.hostedUrl || null;
+  const journeyCode = journeyBody?.data?.journeyCode || null;
+
+  if (!hostedPaymentUrl) {
+    return {
+      ok: false,
+      retailTransactionId: initiated.retailTransactionId,
+      reference: retailRef || undefined,
+      partnerReferenceNumber: uniquePartnerRef,
+      requestPayload: initiated.requestPayload,
+      message: journeyBody?.message || "Failed to create Mito RetailCollection journey for Pay By Bank.",
+    };
+  }
+
+  log(
+    `✅ Mito Pay By Bank RetailCollection ready (retailRef=${retailRef || "-"}, partnerRef=${uniquePartnerRef}, journeyCode=${journeyCode || "-"})`,
+    "mito-retail",
+  );
+
+  return {
+    ok: true,
+    retailTransactionId: initiated.retailTransactionId,
+    reference: retailRef || undefined,
+    partnerReferenceNumber: uniquePartnerRef,
+    paymentUrl: hostedPaymentUrl,
+    journeyCode,
+    qrCodeUrl: journeyBody?.data?.qrCodeUrl ?? null,
+    requestPayload: initiated.requestPayload,
+    message: journeyBody?.message || initiated.message,
+  };
+}
+
+/**
+ * Verifies & finalizes an Affiliate Pay By Bank (`PLAID`) `RetailTransaction` in Mito Staging after
+ * Plaid Link completes:
+ * 1. Polls `GET /api/v1/mito/Transactions/by-reference` briefly (up to ~4.8s) if Plaid's `WALLET` `SETTLED`
+ *    webhook to `furp02-staging` is still in flight.
+ * 2. When `status === "AWAITINGAFFILIATEUPDATE"` (`IsProcessByAffiliate == true`), calls
+ *    `GET /api/v1/mito/Transactions/PaymentConfirmation?referenceNo=<ref>&approvalStatus=Approve`.
+ * 3. When `status === "READYTOPROCESS"` (`IsProcessByAffiliate == false`), triggers
+ *    `POST /api/v1/HangFire/MoveRetailToTransaction` so Mito Staging immediately migrates the `PAID`
+ *    `RetailTransaction` into a `PAID` `Transaction` (`INPROGRESS` / `AWAITINGPROCESSING` / `COMPSUCCESS`)
+ *    without waiting for the 5-minute recurring job.
+ */
+export async function syncMitoPlaidRetailPaymentStatus(input: {
+  partnerReferenceNumber?: string | null;
+  retailReference?: string | null;
+}): Promise<{
+  reference: string | null;
+  partnerReferenceNumber: string | null;
+  status: string | null;
+  paymentStatus: string | null;
+} | null> {
+  const partnerRef = String(input.partnerReferenceNumber || "").trim();
+  const retailRef = String(input.retailReference || "").trim();
+  if ((!partnerRef && !retailRef) || !isMitoRetailConfigured()) return null;
+
+  const creds = loadMitoRetailCredentials()!;
+  try {
+    const { token } = await getMitoRetailToken();
+    const authHeaders = {
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+      apiKey: creds.apiKey,
+    };
+
+    const fetchRetailState = async (): Promise<{
+      reference: string | null;
+      partnerReferenceNumber: string | null;
+      status: string | null;
+      paymentStatus: string | null;
+    } | null> => {
+      if (partnerRef) {
+        const q = new URLSearchParams({ partnerReferenceNumber: partnerRef });
+        if (retailRef) q.set("reference", retailRef);
+        const r = await fetch(`${creds.baseUrl}/api/v1/mito/Transactions/by-reference?${q.toString()}`, {
+          method: "GET",
+          headers: authHeaders,
+          signal: AbortSignal.timeout(6000),
+        });
+        if (r.ok) {
+          const b = (await r.json().catch(() => ({}))) as {
+            data?: {
+              reference?: string | null;
+              partnerReferenceNumber?: string | null;
+              status?: string | null;
+              paymentStatus?: string | null;
+            };
+          };
+          if (b?.data) {
+            return {
+              reference: b.data.reference ? String(b.data.reference) : retailRef || null,
+              partnerReferenceNumber: b.data.partnerReferenceNumber ? String(b.data.partnerReferenceNumber) : partnerRef,
+              status: b.data.status ? String(b.data.status) : null,
+              paymentStatus: b.data.paymentStatus ? String(b.data.paymentStatus) : null,
+            };
+          }
+        }
+      } else if (retailRef) {
+        const r = await fetch(
+          `${creds.baseUrl}/api/v1/mito/Transactions/GetHostedTransactionStatus?reference=${encodeURIComponent(retailRef)}`,
+          {
+            method: "GET",
+            headers: authHeaders,
+            signal: AbortSignal.timeout(6000),
+          },
+        );
+        if (r.ok) {
+          const b = (await r.json().catch(() => ({}))) as {
+            data?: {
+              reference?: string | null;
+              partnerReferenceNumber?: string | null;
+              transactionStatus?: string | null;
+            };
+          };
+          if (b?.data) {
+            return {
+              reference: b.data.reference ? String(b.data.reference) : retailRef,
+              partnerReferenceNumber: b.data.partnerReferenceNumber ? String(b.data.partnerReferenceNumber) : null,
+              status: b.data.transactionStatus ? String(b.data.transactionStatus) : null,
+              paymentStatus: null,
+            };
+          }
+        }
+      }
+      return null;
+    };
+
+    let state = await fetchRetailState();
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const stUpper = String(state?.status || "").trim().toUpperCase();
+      const psUpper = String(state?.paymentStatus || "").trim().toUpperCase();
+      if (
+        psUpper === "PAID" ||
+        stUpper === "READYTOPROCESS" ||
+        stUpper === "AWAITINGAFFILIATEUPDATE" ||
+        stUpper === "INPROGRESS" ||
+        stUpper === "PROCESSED"
+      ) {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      state = await fetchRetailState();
+    }
+
+    let stUpper = String(state?.status || "").trim().toUpperCase();
+    const effectiveRetailRef = state?.reference || retailRef;
+
+    if (stUpper === "AWAITINGAFFILIATEUPDATE" && effectiveRetailRef) {
+      const confirmRes = await fetch(
+        `${creds.baseUrl}/api/v1/mito/Transactions/PaymentConfirmation?referenceNo=${encodeURIComponent(effectiveRetailRef)}&approvalStatus=Approve`,
+        {
+          method: "GET",
+          headers: authHeaders,
+          signal: AbortSignal.timeout(8000),
+        },
+      );
+      if (!confirmRes.ok) {
+        log(
+          `⚠️ Mito PaymentConfirmation returned HTTP ${confirmRes.status} for retailRef=${effectiveRetailRef}`,
+          "mito-retail",
+        );
+      }
+      state = (await fetchRetailState()) ?? state;
+      stUpper = String(state?.status || "").trim().toUpperCase();
+    }
+
+    const psAfterConfirm = String(state?.paymentStatus || "").trim().toUpperCase();
+    if (
+      stUpper === "READYTOPROCESS" ||
+      (psAfterConfirm === "PAID" && stUpper !== "INPROGRESS" && stUpper !== "PROCESSED")
+    ) {
+      const moveRes = await fetch(`${creds.baseUrl}/api/v1/HangFire/MoveRetailToTransaction`, {
+        method: "POST",
+        headers: {
+          ...authHeaders,
+          "Content-Type": "application/json",
+        },
+        body: "{}",
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!moveRes.ok) {
+        log(
+          `⚠️ Mito MoveRetailToTransaction returned HTTP ${moveRes.status} for retailRef=${effectiveRetailRef || "-"}`,
+          "mito-retail",
+        );
+      }
+      state = (await fetchRetailState()) ?? state;
+    }
+
+    log(
+      `✅ Mito Pay By Bank RetailTransaction sync finished (retailRef=${state?.reference || retailRef || "-"}, partnerRef=${state?.partnerReferenceNumber || partnerRef || "-"}, status=${state?.status || "-"}, paymentStatus=${state?.paymentStatus || "-"})`,
+      "mito-retail",
+    );
+    return state;
+  } catch (err) {
+    log(
+      `ℹ️ Mito Pay By Bank RetailTransaction sync warning (${partnerRef || retailRef}): ${(err as Error).message}`,
       "mito-retail",
     );
     return null;

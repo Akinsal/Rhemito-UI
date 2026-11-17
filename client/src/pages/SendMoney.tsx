@@ -1480,6 +1480,9 @@ export default function SendMoney() {
                 oStatus === "COMPLETED" ||
                 oStatus === "COMPSUCCESS" ||
                 oStatus === "APPROVED" ||
+                oStatus === "PROCESSED" ||
+                oStatus === "READYTOPROCESS" ||
+                oStatus === "AWAITINGAFFILIATEUPDATE" ||
                 oStatus === "IN_REVIEW" ||
                 oStatus === "INREVIEW" ||
                 oStatus === "FAILED" ||

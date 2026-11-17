@@ -45,6 +45,7 @@ import {
   getMitoWebhookInspectorLogs,
   getMitoWebhookUrl,
   initiateMitoHostedTransaction,
+  initiateMitoPlaidRetailCollection,
   isMitoRetailConfigured,
   lockMitoExchangeRate,
   recordMitoWebhookInspectorLog,
@@ -55,6 +56,7 @@ import {
   serviceToMitoCollectionMode,
   signMitoWebhookPayload,
   syncMitoCardPaymentStatus,
+  syncMitoPlaidRetailPaymentStatus,
   toCountryIso3,
   verifyMitoWebhookSignature,
   type MitoSendMoneyPaymentMethod,
@@ -178,6 +180,7 @@ async function getOwnedTransaction(idOrReference: string, userId: string): Promi
     (await storage.listSendMoneyTransactionsByOwner(userId)).find(
       (t) =>
         t.reference === clean ||
+        t.reference === clean.replace(/-PBB-[A-Z0-9]+$/i, "") ||
         Boolean(t.mitoTransactionId && String(t.mitoTransactionId).trim() === clean) ||
         Boolean(t.mitoReference && String(t.mitoReference).trim() === clean) ||
         Boolean(t.mitoPaymentReference && String(t.mitoPaymentReference).trim() === clean) ||
@@ -1845,6 +1848,60 @@ export function registerSendMoneyRoutes(app: Express): void {
               ? "https://rhemito-ui.onrender.com/send-money"
               : `${cleanOrigin}/send-money`;
 
+        if (mitoPaymentMethod === "PLAID") {
+          const plaidRetail = await initiateMitoPlaidRetailCollection({
+            userId: mitoUserId,
+            beneficiaryId: mitoBeneficiaryId,
+            providerId: mitoProviderId,
+            rateId: mitoRateId,
+            commission: commissionNum,
+            serviceCode: "MONEYTRANSFER",
+            collectionMode,
+            sendCountryIso3,
+            receiveCountryIso3,
+            sendCurrency,
+            receiveCurrency,
+            sendAmount: sendAmountNum,
+            partnerReferenceNumber: tx.reference,
+            reasonCode: tx.reasonCode,
+            sourceOfFundCode: tx.sourceOfFundCode,
+            paymentNarration: tx.paymentNarration || "Money transfer",
+            redirectUrl: redirectSuccessUrl,
+            webhookUrl: getMitoWebhookUrl(),
+          });
+
+          const rawPlaidMsg = plaidRetail?.message ? String(plaidRetail.message).trim() : "";
+          const meaningfulPlaidMsg =
+            rawPlaidMsg &&
+            !/^HTTP\s+\d+$/i.test(rawPlaidMsg) &&
+            rawPlaidMsg.toLowerCase() !== "unknown"
+              ? rawPlaidMsg
+              : null;
+
+          return {
+            mitoUserId,
+            mitoProviderId,
+            ...(mitoProviderCode ? { mitoProviderCode } : {}),
+            mitoRateId,
+            mitoBeneficiaryId,
+            sendCountryIso3,
+            receiveCountryIso3,
+            ...(plaidRetail?.reference
+              ? { mitoTransactionId: plaidRetail.reference, mitoReference: plaidRetail.reference }
+              : {}),
+            ...(plaidRetail?.paymentUrl !== undefined ? { mitoPaymentUrl: plaidRetail.paymentUrl } : {}),
+            mitoPaymentSession: null,
+            ...(plaidRetail?.journeyCode !== undefined ? { mitoLinkToken: plaidRetail.journeyCode } : {}),
+            ...(plaidRetail?.partnerReferenceNumber
+              ? { mitoPaymentReference: plaidRetail.partnerReferenceNumber }
+              : {}),
+            ...(plaidRetail?.requestPayload ? { mitoHostedPayload: plaidRetail.requestPayload } : {}),
+            ...(plaidRetail?.ok === false
+              ? { _mitoGatewayMessage: meaningfulPlaidMsg || gatewayFailureMsg }
+              : {}),
+          };
+        }
+
         const sent = await sendMitoTransaction({
           userId: mitoUserId,
           reasonId: tx.reasonCode,
@@ -2136,7 +2193,10 @@ export function registerSendMoneyRoutes(app: Express): void {
           mitoSendPatch.mitoPaymentUrl,
       );
       const mitoPatch = {
-        ...(tx.mitoTransactionId || hasDirectGatewayTarget
+        ...(tx.mitoTransactionId ||
+        hasDirectGatewayTarget ||
+        parsed.data.paymentMethod === "instant_bank" ||
+        Boolean(mitoGatewayMessage)
           ? {}
           : await initiateHostedForSendMoneyTx(effectiveTx, userId, req)),
         ...mitoSendPatch,
@@ -2153,11 +2213,7 @@ export function registerSendMoneyRoutes(app: Express): void {
                 mitoPatch.mitoPaymentSession ||
                   (mitoPatch.mitoPaymentUrl && mitoPatch.mitoPaymentUrl.startsWith("http")),
               )
-            : Boolean(
-                (mitoPatch.mitoPaymentUrl && mitoPatch.mitoPaymentUrl.startsWith("http")) ||
-                  (mitoPatch.mitoHostedUrl && mitoPatch.mitoHostedUrl.startsWith("http")) ||
-                  (tx.mitoHostedUrl && tx.mitoHostedUrl.startsWith("http")),
-              );
+            : Boolean(mitoPatch.mitoPaymentUrl && mitoPatch.mitoPaymentUrl.startsWith("http"));
         if (!hasValidGatewayTarget) {
           if (promoAtPayment) await promo.releaseForPayment(tx.reference);
           if (bonusAtPayment) await bonus.releaseForPayment(userId, tx.reference);
@@ -2320,6 +2376,25 @@ export function registerSendMoneyRoutes(app: Express): void {
           if (resolvedPayId) {
             effectivePaymentRef = paymentId || resolvedPayId;
             await syncMitoCardPaymentStatus(resolvedPayId);
+          }
+        } else if (tx.paymentMethod === "instant_bank" && isMitoRetailConfigured()) {
+          const hostedPartnerRef =
+            typeof (tx.mitoHostedPayload as Record<string, unknown> | undefined)?.PartnerReferenceNumber === "string"
+              ? String((tx.mitoHostedPayload as Record<string, unknown>).PartnerReferenceNumber).trim()
+              : "";
+          const partnerRef =
+            hostedPartnerRef ||
+            (tx.mitoPaymentReference && tx.mitoPaymentReference.startsWith("TXN-")
+              ? tx.mitoPaymentReference.trim()
+              : "") ||
+            tx.reference;
+          const retailRef = tx.mitoReference || tx.mitoTransactionId || parsed.data.tnxref || null;
+          const syncedPlaid = await syncMitoPlaidRetailPaymentStatus({
+            partnerReferenceNumber: partnerRef,
+            retailReference: retailRef,
+          });
+          if (syncedPlaid?.reference && !effectivePaymentRef) {
+            effectivePaymentRef = syncedPlaid.partnerReferenceNumber || syncedPlaid.reference;
           }
         }
 
@@ -2587,10 +2662,16 @@ export function registerSendMoneyRoutes(app: Express): void {
       const paymentReference = String(data?.paymentReference || "").trim();
 
       if (!isKycEvent || partnerRef || transactionRef || paymentReference) {
+        const basePartnerRef = partnerRef ? partnerRef.replace(/-PBB-[A-Z0-9]+$/i, "") : "";
         const allTxs = [...(await storage.listAllSendMoneyTransactions())].reverse();
         matchedTransaction =
           (partnerRef
-            ? allTxs.find((t) => t.reference === partnerRef || t.id === partnerRef)
+            ? allTxs.find(
+                (t) =>
+                  t.reference === partnerRef ||
+                  (basePartnerRef && t.reference === basePartnerRef) ||
+                  t.id === partnerRef,
+              )
             : undefined) ??
           allTxs.find((t) => {
             if (
