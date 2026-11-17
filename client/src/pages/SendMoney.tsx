@@ -48,7 +48,7 @@ import {
     SendMoneyApiError,
     validateMitoRate,
 } from "@/lib/sendMoney";
-import type { SendMoneyPaymentMethod, SendMoneyService } from "@shared/sendMoney";
+import type { SendMoneyPaymentMethod, SendMoneyService, SendMoneyTransactionView } from "@shared/sendMoney";
 
 // Mock Data
 const DEFAULT_EXCHANGE_RATE = 2025.50; // 1 GBP = 2025.50 NGN (fallback)
@@ -125,6 +125,7 @@ export interface PaymentOutcomeState {
     reason?: string;
     journeyCode?: string | null;
     timestamp: string;
+    confirmedTx?: SendMoneyTransactionView | null;
 }
 
 function classifyPaymentOutcome(
@@ -164,7 +165,9 @@ function classifyPaymentOutcome(
         v === "PROCESSED" ||
         v === "CAPTURED" ||
         v === "AUTHORIZED" ||
-        v === "SETTLED";
+        v === "SETTLED" ||
+        v === "READYTOPROCESS" ||
+        v === "AWAITINGAFFILIATEUPDATE";
 
     if (isTokenExpired(s) || isTokenExpired(ps) || r.includes("expir") || r.includes("timeout") || r === "restart") {
         return "expired";
@@ -190,8 +193,6 @@ function classifyPaymentOutcome(
         s === "INREVIEW" ||
         s === "PENDING" ||
         s === "PROCESSING" ||
-        s === "READYTOPROCESS" ||
-        s === "AWAITINGAFFILIATEUPDATE" ||
         s === "INITIATED" ||
         s === "SUBMITTED" ||
         ps === "PENDING" ||
@@ -210,10 +211,13 @@ function classifyPaymentOutcome(
 
 function extractCardOutcomeFromUrl(rawUrl: string): {
     hostname: string;
+    txId: string | null;
     tnxref: string | null;
     status: string | null;
     paymentStatus: string | null;
     ckoSessionId: string | null;
+    ckoPaymentId: string | null;
+    cardRedirect: string | null;
     reason: string | null;
     journeyCode: string | null;
 } | null {
@@ -255,6 +259,7 @@ function extractCardOutcomeFromUrl(rawUrl: string): {
         };
         return {
             hostname: parsed.hostname.toLowerCase(),
+            txId: getFirst("txId", "transactionId"),
             tnxref: getFirst(
                 "tnxref",
                 "orderNo",
@@ -267,6 +272,8 @@ function extractCardOutcomeFromUrl(rawUrl: string): {
             status: getFirst("status", "orderStatus", "journeyStatus"),
             paymentStatus: getFirst("paymentStatus", "cko-payment-status"),
             ckoSessionId: getFirst("cko-session-id", "cko-payment-id"),
+            ckoPaymentId: getFirst("cko-payment-id"),
+            cardRedirect: getFirst("cardRedirect"),
             reason: getFirst("reason", "error", "message", "declined_reason"),
             journeyCode: getFirst("journeyCode", "journey_code"),
         };
@@ -302,6 +309,97 @@ function extractJourneyCodeFromUrl(rawUrl?: string | null): string | null {
     }
 }
 
+const ACTIVE_GATEWAY_STORAGE_KEY = "rhemito_active_gateway_tx_v1";
+const ACTIVE_GATEWAY_TTL_MS = 60 * 60 * 1000;
+
+interface ActiveGatewaySession {
+    transactionId: string;
+    reference: string;
+    mitoReference?: string | null;
+    sessionId?: string | null;
+    paymentMethod: string;
+    savedAt: number;
+}
+
+function saveActiveGatewaySession(
+    data: Omit<ActiveGatewaySession, "savedAt"> & { savedAt?: number },
+): void {
+    if (typeof window === "undefined") return;
+    try {
+        if (!data.transactionId || !data.transactionId.trim()) return;
+        const payload: ActiveGatewaySession = {
+            transactionId: data.transactionId.trim(),
+            reference: (data.reference || "").trim(),
+            mitoReference: data.mitoReference ? data.mitoReference.trim() : null,
+            sessionId: data.sessionId ? data.sessionId.trim() : null,
+            paymentMethod: data.paymentMethod || "",
+            savedAt: typeof data.savedAt === "number" ? data.savedAt : Date.now(),
+        };
+        window.sessionStorage.setItem(ACTIVE_GATEWAY_STORAGE_KEY, JSON.stringify(payload));
+    } catch {
+        // ignore storage errors
+    }
+}
+
+function readActiveGatewaySession(): ActiveGatewaySession | null {
+    if (typeof window === "undefined") return null;
+    try {
+        const raw = window.sessionStorage.getItem(ACTIVE_GATEWAY_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as Partial<ActiveGatewaySession> | null;
+        if (
+            !parsed ||
+            typeof parsed !== "object" ||
+            typeof parsed.transactionId !== "string" ||
+            !parsed.transactionId.trim()
+        ) {
+            window.sessionStorage.removeItem(ACTIVE_GATEWAY_STORAGE_KEY);
+            return null;
+        }
+        const savedAt = typeof parsed.savedAt === "number" ? parsed.savedAt : 0;
+        if (!savedAt || Date.now() - savedAt > ACTIVE_GATEWAY_TTL_MS) {
+            window.sessionStorage.removeItem(ACTIVE_GATEWAY_STORAGE_KEY);
+            return null;
+        }
+        return {
+            transactionId: parsed.transactionId.trim(),
+            reference: typeof parsed.reference === "string" ? parsed.reference.trim() : "",
+            mitoReference:
+                typeof parsed.mitoReference === "string" && parsed.mitoReference.trim()
+                    ? parsed.mitoReference.trim()
+                    : null,
+            sessionId:
+                typeof parsed.sessionId === "string" && parsed.sessionId.trim()
+                    ? parsed.sessionId.trim()
+                    : null,
+            paymentMethod: typeof parsed.paymentMethod === "string" ? parsed.paymentMethod : "",
+            savedAt,
+        };
+    } catch {
+        return null;
+    }
+}
+
+function clearActiveGatewaySession(): void {
+    if (typeof window === "undefined") return;
+    try {
+        window.sessionStorage.removeItem(ACTIVE_GATEWAY_STORAGE_KEY);
+    } catch {
+        // ignore storage errors
+    }
+}
+
+const isInitialCardRedirectReturn = (): boolean => {
+    if (typeof window === "undefined") return false;
+    const ex = extractCardOutcomeFromUrl(window.location.href);
+    return (
+        window.location.pathname.toLowerCase() === "/send/status" ||
+        ex?.cardRedirect === "1" ||
+        Boolean(ex?.ckoPaymentId) ||
+        Boolean(ex?.ckoSessionId)
+    );
+};
+
 export default function SendMoney() {
     const [, setLocation] = useLocation();
     const searchParams = useSearch();
@@ -314,7 +412,15 @@ export default function SendMoney() {
     const { toast } = useToast();
     const { upsertRecipient } = useContacts();
     const queryClient = useQueryClient();
-    const [currentStep, setCurrentStep] = useState(1);
+    const [currentStep, setCurrentStep] = useState<number>(() =>
+        isInitialCardRedirectReturn() ? 4 : 1,
+    );
+    const [resolvingCardRedirect, setResolvingCardRedirect] = useState<boolean>(() => {
+        if (typeof window === "undefined") return false;
+        const ex = extractCardOutcomeFromUrl(window.location.href);
+        const hasImmediateStatus = Boolean(ex?.status || ex?.paymentStatus);
+        return !hasImmediateStatus && isInitialCardRedirectReturn();
+    });
 
     // Form State
     const [sendCurrencyState, setSendCurrencyState] = useState<string>(
@@ -492,6 +598,7 @@ export default function SendMoney() {
 
     const applyPaymentOutcome = useCallback(
         (params: {
+            transactionId?: string | null;
             rawStatus?: string | null;
             paymentStatus?: string | null;
             paymentId?: string | null;
@@ -509,24 +616,61 @@ export default function SendMoney() {
                 params.eventType,
                 params.paymentStatus,
             );
-            const resolvedRef = (params.reference || transactionRef || "").trim();
+            const persistedGw = readActiveGatewaySession();
+            const resolvedRef = (
+                params.reference ||
+                transactionRef ||
+                persistedGw?.mitoReference ||
+                persistedGw?.reference ||
+                ""
+            ).trim();
             if (resolvedRef) {
                 setTransactionRef(resolvedRef);
             }
             const resolvedJourneyCode = params.journeyCode || extractJourneyCodeFromUrl(mitoPayByBankUrl);
-            const activeTxId = transactionIdRef.current;
-            if (gatewaySessionActiveRef.current && activeTxId) {
-                gatewaySessionActiveRef.current = false;
-                void confirmSendMoneyGateway(activeTxId, {
+            const targetTxId = (
+                params.transactionId ||
+                transactionIdRef.current ||
+                persistedGw?.transactionId ||
+                params.reference ||
+                params.sessionId ||
+                ""
+            ).trim();
+            const shouldConfirmGateway =
+                Boolean(targetTxId) &&
+                (gatewaySessionActiveRef.current ||
+                    Boolean(persistedGw) ||
+                    Boolean(params.sessionId) ||
+                    Boolean(params.transactionId));
+            setResolvingCardRedirect(false);
+            if (shouldConfirmGateway) {
+                if (category !== "processing") {
+                    gatewaySessionActiveRef.current = false;
+                    clearActiveGatewaySession();
+                }
+                void confirmSendMoneyGateway(targetTxId, {
                     outcome: category,
                     rawStatus: params.rawStatus || undefined,
                     paymentStatus: params.paymentStatus || undefined,
                     paymentId: params.paymentId || undefined,
-                    sessionId: params.sessionId || undefined,
+                    sessionId: params.sessionId || persistedGw?.sessionId || undefined,
+                    tnxref: resolvedRef || undefined,
                     journeyCode: resolvedJourneyCode || undefined,
                     reason: params.reason || undefined,
                 })
                     .then((confirmedView) => {
+                        if (confirmedView?.reference) {
+                            setTransactionRef(confirmedView.reference);
+                        }
+                        setPaymentOutcome((prev) =>
+                            prev
+                                ? {
+                                      ...prev,
+                                      reference: confirmedView?.reference || prev.reference,
+                                      confirmedTx: confirmedView,
+                                  }
+                                : prev,
+                        );
                         syncSendMoneyCache(confirmedView);
                         void refetchRewardsRef.current();
                     })
@@ -541,13 +685,14 @@ export default function SendMoney() {
             setMitoCardPaymentSession(null);
             setShowConfirmation(false);
             setCurrentStep(4);
+            const activeMethod = paymentMethod || persistedGw?.paymentMethod || "";
             const effectiveMethodLabel =
                 params.methodLabel ||
-                (paymentMethod === "card"
+                (activeMethod === "card"
                     ? "Credit / Debit Card"
-                    : paymentMethod === "wallet"
+                    : activeMethod === "wallet"
                     ? "Wallet Balance"
-                    : paymentMethod === "manual_transfer"
+                    : activeMethod === "manual_transfer"
                     ? "Manual Bank Transfer"
                     : "Instant Pay By Bank");
             setPaymentOutcome({
@@ -560,11 +705,10 @@ export default function SendMoney() {
                 journeyCode: resolvedJourneyCode,
                 timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             });
+            const isPaidOrProcessing = category === "completed" || category === "processing";
             const shouldAutoRedirect =
-                params.autoRedirectHome !== undefined ? params.autoRedirectHome : true;
-            const countdownSeconds =
-                category === "completed" || category === "processing" ? 6 : 8;
-            setRedirectCountdown(shouldAutoRedirect ? countdownSeconds : null);
+                isPaidOrProcessing && (params.autoRedirectHome !== undefined ? params.autoRedirectHome : true);
+            setRedirectCountdown(shouldAutoRedirect ? 6 : null);
         },
         [mitoPayByBankUrl, paymentMethod, syncSendMoneyCache, transactionRef],
     );
@@ -702,12 +846,18 @@ export default function SendMoney() {
                         setCheckoutFlowMounting(false);
                         setMitoCardPaymentSession(null);
                         const rawCardStatus = String(paymentResponse?.status || "Approved");
+                        const upperCardStatus = rawCardStatus.trim().toUpperCase();
                         const normalizedStatus =
-                            rawCardStatus === "Approved" ||
-                            rawCardStatus === "APPROVED" ||
-                            rawCardStatus === "Authorized" ||
-                            rawCardStatus === "Captured" ||
-                            rawCardStatus === "Paid"
+                            upperCardStatus === "APPROVED" ||
+                            upperCardStatus === "AUTHORIZED" ||
+                            upperCardStatus === "CAPTURED" ||
+                            upperCardStatus === "PAID" ||
+                            upperCardStatus === "SUCCESS" ||
+                            upperCardStatus === "SUCCEEDED" ||
+                            upperCardStatus === "SUCCESSFUL" ||
+                            upperCardStatus === "COMPLETED" ||
+                            upperCardStatus === "CARD VERIFIED" ||
+                            upperCardStatus === "CARD_VERIFIED"
                                 ? "COMPSUCCESS"
                                 : rawCardStatus;
                         const category = classifyPaymentOutcome(
@@ -718,7 +868,14 @@ export default function SendMoney() {
                         );
                         applyPaymentOutcomeRef.current({
                             rawStatus: normalizedStatus,
-                            paymentStatus: rawCardStatus === "Approved" ? "Captured" : rawCardStatus,
+                            paymentStatus:
+                                upperCardStatus === "APPROVED" ||
+                                upperCardStatus === "CAPTURED" ||
+                                upperCardStatus === "PAID" ||
+                                upperCardStatus === "SUCCESS" ||
+                                upperCardStatus === "SUCCEEDED"
+                                    ? "Captured"
+                                    : rawCardStatus,
                             paymentId: paymentResponse?.id,
                             sessionId: String((mitoCardPaymentSession as any)?.id || "") || undefined,
                             reference: transactionRefRef.current || paymentResponse?.id || "",
@@ -851,16 +1008,44 @@ export default function SendMoney() {
         if (!mitoCardPaymentSession || currentStep !== 4) return;
         const TERMINAL_CARD_STATUSES = new Set([
             "COMPSUCCESS",
-            "COMPFAILED",
+            "SUCCESS",
+            "SUCCEEDED",
+            "SUCCESSFUL",
+            "PAID",
             "APPROVED",
             "CAPTURED",
             "AUTHORIZED",
-            "PAID",
+            "PROCESSED",
+            "SETTLED",
+            "COMPLETED",
+            "READYTOPROCESS",
+            "AWAITINGAFFILIATEUPDATE",
+            "COMPFAILED",
             "DECLINED",
             "FAILED",
+            "FAIL",
+            "ERROR",
+            "REJECTED",
             "CANCELLED",
             "CANCELED",
             "EXPIRED",
+            "TIMEOUT",
+            "TIMEDOUT",
+        ]);
+        const COMPLETED_CARD_STATUSES = new Set([
+            "COMPSUCCESS",
+            "SUCCESS",
+            "SUCCEEDED",
+            "SUCCESSFUL",
+            "PAID",
+            "APPROVED",
+            "CAPTURED",
+            "AUTHORIZED",
+            "PROCESSED",
+            "SETTLED",
+            "COMPLETED",
+            "READYTOPROCESS",
+            "AWAITINGAFFILIATEUPDATE",
         ]);
         const handleCardReturnMessage = (event: MessageEvent) => {
             const originStr = String(event?.origin || "").trim();
@@ -870,12 +1055,20 @@ export default function SendMoney() {
                     if (originHost === "checkout.com" || originHost.endsWith(".checkout.com")) {
                         return;
                     }
-                    if (
-                        typeof window !== "undefined" &&
-                        event.origin !== window.location.origin &&
-                        !originHost.endsWith("rhemito-ui.onrender.com") &&
-                        !originHost.endsWith("rhemito.com")
-                    ) {
+                    const isTrustedOrigin =
+                        (typeof window !== "undefined" && event.origin === window.location.origin) ||
+                        originHost === "rhemito-ui.onrender.com" ||
+                        (originHost.endsWith(".onrender.com") && originHost.startsWith("rhemito")) ||
+                        originHost === "rhemito.com" ||
+                        originHost.endsWith(".rhemito.com") ||
+                        originHost === "rhemito-web-nextjs-dev.herokuapp.com" ||
+                        (originHost.endsWith(".herokuapp.com") &&
+                            (originHost.startsWith("rhemito-") || originHost.startsWith("mito-"))) ||
+                        originHost === "funtechcom.com" ||
+                        originHost.endsWith(".funtechcom.com") ||
+                        originHost === "mito.money" ||
+                        originHost.endsWith(".mito.money");
+                    if (!isTrustedOrigin) {
                         return;
                     }
                 } catch {
@@ -899,14 +1092,28 @@ export default function SendMoney() {
             ) {
                 return;
             }
-            if (typeof data.status !== "string" || !data.status.trim()) return;
+            const rawStatusCandidate =
+                typeof data.status === "string" && data.status.trim()
+                    ? data.status.trim()
+                    : typeof data.orderStatus === "string" && data.orderStatus.trim()
+                    ? data.orderStatus.trim()
+                    : typeof data.paymentStatus === "string" && data.paymentStatus.trim()
+                    ? data.paymentStatus.trim()
+                    : "";
+            if (!rawStatusCandidate) return;
 
-            const raw = data.status.trim();
-            const upper = raw.toUpperCase();
-            if (!TERMINAL_CARD_STATUSES.has(upper)) return;
+            const raw = rawStatusCandidate;
+            const normStatus = raw.toUpperCase().replace(/[\s_-]+/g, "");
+            if (!TERMINAL_CARD_STATUSES.has(normStatus)) return;
 
-            const mapped = upper === "APPROVED" ? "COMPSUCCESS" : raw;
+            const mapped = COMPLETED_CARD_STATUSES.has(normStatus) ? "COMPSUCCESS" : raw;
             applyPaymentOutcomeRef.current({
+                transactionId:
+                    typeof data.txId === "string" && data.txId.trim()
+                        ? data.txId.trim()
+                        : typeof data.transactionId === "string" && data.transactionId.trim()
+                        ? data.transactionId.trim()
+                        : undefined,
                 rawStatus: mapped,
                 paymentStatus: typeof data.paymentStatus === "string" ? data.paymentStatus : undefined,
                 paymentId: typeof data.paymentId === "string" ? data.paymentId : undefined,
@@ -925,56 +1132,91 @@ export default function SendMoney() {
         return () => window.removeEventListener("message", handleCardReturnMessage, false);
     }, [mitoCardPaymentSession, currentStep]);
 
+    const handledInitialUrlCallbackRef = useRef<boolean>(false);
+
     // If Mito redirects back to our returnUrl with ?tnxref=...&status=... (either in an iframe or top-level window),
     // forward explicit terminal outcomes to the parent window if in an iframe, or display Payment Status if top-level.
     useEffect(() => {
         if (typeof window === "undefined") return;
+        if (handledInitialUrlCallbackRef.current) return;
+        handledInitialUrlCallbackRef.current = true;
+
         const extracted = extractCardOutcomeFromUrl(window.location.href);
         const tnxref = extracted?.tnxref || null;
         const status = extracted?.status || extracted?.paymentStatus || null;
         const paymentStatus = extracted?.paymentStatus || null;
         const ckoSessionId = extracted?.ckoSessionId || null;
+        const ckoPaymentId = extracted?.ckoPaymentId || null;
+        const txIdParam = extracted?.txId || null;
         const reason = extracted?.reason || null;
         const journeyCodeParam = extracted?.journeyCode || null;
-        const isCardCallbackPath =
-            window.location.pathname.toLowerCase() === "/send/status" || Boolean(paymentStatus);
+        const shouldResolveCardRedirect =
+            Boolean(ckoSessionId) ||
+            Boolean(ckoPaymentId) ||
+            extracted?.cardRedirect === "1" ||
+            window.location.pathname.toLowerCase() === "/send/status";
+        const isCardCallbackPath = shouldResolveCardRedirect || Boolean(paymentStatus);
 
         if (window.parent !== window) {
+            const postCardOutcomeToTop = (msgPayload: Record<string, unknown>) => {
+                const targetOrigin = window.location.origin || "*";
+                try {
+                    (window.top || window.parent).postMessage(msgPayload, targetOrigin);
+                } catch {
+                    try {
+                        (window.top || window.parent).postMessage(msgPayload, "*");
+                    } catch {
+                        // ignore cross-origin postMessage errors
+                    }
+                }
+                if (window.parent && window.parent !== window.top) {
+                    try {
+                        window.parent.postMessage(msgPayload, "*");
+                    } catch {
+                        // ignore intermediate frame errors
+                    }
+                }
+            };
             if (status) {
-                window.parent.postMessage(
-                    {
-                        status,
-                        paymentStatus: paymentStatus || undefined,
-                        tnxref: tnxref || ckoSessionId,
-                        ckoSessionId: ckoSessionId || undefined,
-                        reason,
-                        journeyCode: journeyCodeParam,
-                        methodLabel: isCardCallbackPath || ckoSessionId ? "Credit / Debit Card" : undefined,
-                    },
-                    window.location.origin || "*",
-                );
-            } else if (ckoSessionId) {
+                postCardOutcomeToTop({
+                    status,
+                    paymentStatus: paymentStatus || undefined,
+                    paymentId: ckoPaymentId || undefined,
+                    txId: txIdParam || undefined,
+                    tnxref: tnxref || ckoSessionId,
+                    ckoSessionId: ckoSessionId || undefined,
+                    reason,
+                    journeyCode: journeyCodeParam,
+                    methodLabel: isCardCallbackPath || ckoSessionId ? "Credit / Debit Card" : undefined,
+                });
+            } else if (shouldResolveCardRedirect) {
+                const persistedGw = readActiveGatewaySession();
                 void fetch("/api/send-money/mito/resolve-card-redirect", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ url: window.location.href, sessionId: ckoSessionId }),
+                    credentials: "include",
+                    body: JSON.stringify({
+                        url: window.location.href,
+                        sessionId: ckoSessionId || persistedGw?.sessionId || undefined,
+                        paymentId: ckoPaymentId || undefined,
+                        txId: txIdParam || persistedGw?.transactionId || undefined,
+                    }),
                 })
                     .then((r) => r.json().catch(() => ({})))
                     .then((resolved: any) => {
                         const explicitStatus = resolved?.status || resolved?.paymentStatus || null;
                         if (!explicitStatus) return;
-                        window.parent.postMessage(
-                            {
-                                status: explicitStatus,
-                                paymentStatus: resolved?.paymentStatus || undefined,
-                                tnxref: resolved?.tnxref || tnxref || ckoSessionId,
-                                ckoSessionId,
-                                reason: resolved?.reason || reason,
-                                journeyCode: resolved?.journeyCode || journeyCodeParam,
-                                methodLabel: "Credit / Debit Card",
-                            },
-                            window.location.origin || "*",
-                        );
+                        postCardOutcomeToTop({
+                            status: explicitStatus,
+                            paymentStatus: resolved?.paymentStatus || undefined,
+                            paymentId: resolved?.paymentId || ckoPaymentId || undefined,
+                            txId: resolved?.transactionId || txIdParam || undefined,
+                            tnxref: resolved?.tnxref || resolved?.reference || tnxref || ckoSessionId,
+                            ckoSessionId,
+                            reason: resolved?.reason || reason,
+                            journeyCode: resolved?.journeyCode || journeyCodeParam,
+                            methodLabel: "Credit / Debit Card",
+                        });
                     })
                     .catch(() => {});
             }
@@ -982,44 +1224,76 @@ export default function SendMoney() {
         }
 
         if (status) {
+            const persistedForTopLevel = readActiveGatewaySession();
             applyPaymentOutcome({
+                transactionId:
+                    txIdParam || persistedForTopLevel?.transactionId || tnxref || ckoSessionId || undefined,
                 rawStatus: status,
                 paymentStatus: paymentStatus || undefined,
-                sessionId: ckoSessionId,
+                paymentId: ckoPaymentId || undefined,
+                sessionId: ckoSessionId || persistedForTopLevel?.sessionId || undefined,
                 reason,
                 reference: tnxref || ckoSessionId,
                 journeyCode: journeyCodeParam,
-                methodLabel: isCardCallbackPath || ckoSessionId ? "Credit / Debit Card" : undefined,
+                methodLabel:
+                    isCardCallbackPath || ckoSessionId || persistedForTopLevel?.paymentMethod === "card"
+                        ? "Credit / Debit Card"
+                        : undefined,
+                autoRedirectHome: true,
             });
             try {
-                window.history.replaceState({}, "", "/send-money");
+                window.history.replaceState({}, "", "/send/status");
             } catch {
                 // ignore history errors
             }
-        } else if (ckoSessionId) {
+        } else if (shouldResolveCardRedirect) {
+            const persistedForTopLevel = readActiveGatewaySession();
+            setResolvingCardRedirect(true);
             void fetch("/api/send-money/mito/resolve-card-redirect", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ url: window.location.href, sessionId: ckoSessionId }),
+                credentials: "include",
+                body: JSON.stringify({
+                    url: window.location.href,
+                    sessionId: ckoSessionId || persistedForTopLevel?.sessionId || undefined,
+                    paymentId: ckoPaymentId || undefined,
+                    txId: txIdParam || persistedForTopLevel?.transactionId || undefined,
+                }),
             })
                 .then((r) => r.json().catch(() => ({})))
                 .then((resolved: any) => {
                     const explicitStatus = resolved?.status || resolved?.paymentStatus || null;
-                    if (!explicitStatus) return;
+                    if (!explicitStatus) {
+                        setResolvingCardRedirect(false);
+                        return;
+                    }
+                    const latestPersisted = readActiveGatewaySession() || persistedForTopLevel;
                     applyPaymentOutcome({
+                        transactionId:
+                            resolved?.transactionId ||
+                            txIdParam ||
+                            latestPersisted?.transactionId ||
+                            resolved?.tnxref ||
+                            tnxref ||
+                            ckoSessionId ||
+                            undefined,
                         rawStatus: explicitStatus,
                         paymentStatus: resolved?.paymentStatus || undefined,
-                        sessionId: ckoSessionId,
+                        paymentId: resolved?.paymentId || ckoPaymentId || undefined,
+                        sessionId: ckoSessionId || latestPersisted?.sessionId || undefined,
                         reason: resolved?.reason || reason,
-                        reference: resolved?.tnxref || tnxref || ckoSessionId,
+                        reference: resolved?.tnxref || resolved?.reference || tnxref || ckoSessionId,
                         journeyCode: resolved?.journeyCode || journeyCodeParam,
                         methodLabel: "Credit / Debit Card",
+                        autoRedirectHome: true,
                     });
                 })
-                .catch(() => {})
+                .catch(() => {
+                    setResolvingCardRedirect(false);
+                })
                 .finally(() => {
                     try {
-                        window.history.replaceState({}, "", "/send-money");
+                        window.history.replaceState({}, "", "/send/status");
                     } catch {
                         // ignore history errors
                     }
@@ -1028,9 +1302,13 @@ export default function SendMoney() {
             void fetchMitoJourneyStatus(journeyCodeParam).then((jStatus) => {
                 if (!jStatus) return;
                 const effectiveStatus = jStatus.orderStatus || jStatus.journeyStatus || "PROCESSING";
+                const persistedForTopLevel = readActiveGatewaySession();
+                const resolvedJourneyRef =
+                    jStatus.orderNo || jStatus.partnerReferenceNumber || jStatus.reference || tnxref;
                 applyPaymentOutcome({
+                    transactionId: persistedForTopLevel?.transactionId || resolvedJourneyRef || undefined,
                     rawStatus: effectiveStatus,
-                    reference: jStatus.orderNo || jStatus.partnerReferenceNumber || jStatus.reference || tnxref,
+                    reference: resolvedJourneyRef,
                     journeyCode: jStatus.journeyCode,
                 });
             });
@@ -1435,6 +1713,111 @@ export default function SendMoney() {
     const finalReceiveAmount = (amountSentGBP * EXCHANGE_RATE).toFixed(2);
     const sendSymbol = CURRENCY_SYMBOLS[SEND_CURRENCY] ?? "£";
     const receiveSymbol = CURRENCY_SYMBOLS[recipientDetails.currency || "NGN"] ?? "₦";
+
+    const confirmedTx = paymentOutcome?.confirmedTx ?? null;
+    const outcomeSendCurrency = confirmedTx ? confirmedTx.sendCurrency : SEND_CURRENCY;
+    const outcomeReceiveCurrency = confirmedTx
+        ? confirmedTx.receiveCurrency
+        : recipientDetails.currency || "NGN";
+    const outcomeSendSymbol = CURRENCY_SYMBOLS[outcomeSendCurrency] ?? "£";
+    const outcomeReceiveSymbol = CURRENCY_SYMBOLS[outcomeReceiveCurrency] ?? "₦";
+    const outcomeYouSend = confirmedTx ? parseFloat(confirmedTx.sendAmount || "0") : youSendAmount;
+    const outcomeEffectiveFee = confirmedTx ? parseFloat(confirmedTx.fee || "0") : effectiveFee;
+    const outcomePromoCode = confirmedTx ? confirmedTx.promoCode ?? "" : promoCode;
+    const outcomePromoDiscount = confirmedTx ? parseFloat(confirmedTx.promoDiscount || "0") : promoDiscount;
+    const outcomePromoApplied = confirmedTx
+        ? Boolean(confirmedTx.promoCode && outcomePromoDiscount > 0)
+        : promoApplied;
+    const outcomePromoOnAmount = confirmedTx
+        ? confirmedTx.promoAppliesTo === "amount"
+        : promoOnAmount;
+    const outcomeBonusAmount = confirmedTx ? parseFloat(confirmedTx.bonusCredit || "0") : bonusAmount;
+    const outcomeBonusType: "pay_less" | "send_more" = confirmedTx
+        ? confirmedTx.bonusCreditMode === "send_more"
+            ? "send_more"
+            : "pay_less"
+        : bonusType;
+    const outcomeUseBonus = confirmedTx
+        ? outcomeBonusAmount > 0 && Boolean(confirmedTx.bonusCreditMode)
+        : useBonus;
+    const outcomeTotalPay = confirmedTx
+        ? Math.max(
+              0,
+              outcomeYouSend +
+                  outcomeEffectiveFee -
+                  (outcomePromoOnAmount ? Math.min(outcomePromoDiscount, outcomeYouSend) : 0) -
+                  (outcomeUseBonus && outcomeBonusType === "pay_less" ? outcomeBonusAmount : 0),
+          )
+        : Math.max(0, totalPay);
+    const outcomeExchangeRate = confirmedTx
+        ? parseFloat(confirmedTx.exchangeRate || "0") || EXCHANGE_RATE
+        : EXCHANGE_RATE;
+    const outcomeFinalReceiveAmount = confirmedTx
+        ? parseFloat(confirmedTx.receiveAmount || "0").toFixed(2)
+        : finalReceiveAmount;
+    const outcomeDeliveryMethod = confirmedTx ? confirmedTx.service || deliveryMethod : deliveryMethod;
+    const wizardRecipientName =
+        beneficiaryType === "business"
+            ? recipientDetails.companyName.trim() || selectedRecipient?.name || ""
+            : [recipientDetails.firstName.trim(), recipientDetails.lastName.trim()]
+                  .filter(Boolean)
+                  .join(" ") ||
+              selectedRecipient?.name ||
+              "";
+    const outcomeRecipientName = confirmedTx
+        ? confirmedTx.recipientName?.trim() ||
+          confirmedTx.companyName?.trim() ||
+          [confirmedTx.recipientFirstName?.trim(), confirmedTx.recipientLastName?.trim()]
+              .filter(Boolean)
+              .join(" ") ||
+          wizardRecipientName ||
+          "—"
+        : wizardRecipientName || "—";
+    const outcomeHeroRecipientName = outcomeRecipientName === "—" ? "Recipient" : outcomeRecipientName;
+    const outcomeBankName = confirmedTx
+        ? confirmedTx.bankName?.trim() ||
+          recipientDetails.bankName.trim() ||
+          selectedRecipient?.bank ||
+          "—"
+        : recipientDetails.bankName.trim() || selectedRecipient?.bank || "—";
+    const outcomeAccountLabel =
+        outcomeDeliveryMethod === "mobile_money"
+            ? "Mobile Number"
+            : (
+                  confirmedTx
+                      ? Boolean(confirmedTx.iban?.trim()) && !confirmedTx.accountNumber?.trim()
+                      : Boolean(recipientDetails.iban.trim()) && !recipientDetails.accountNumber.trim()
+              )
+            ? "IBAN"
+            : "Account Number";
+    const outcomeAccountValue =
+        outcomeDeliveryMethod === "mobile_money"
+            ? confirmedTx
+                ? confirmedTx.mobileNo?.trim() ||
+                  confirmedTx.accountNumber?.trim() ||
+                  recipientDetails.mobileNo.trim() ||
+                  recipientDetails.accountNumber.trim() ||
+                  selectedRecipient?.mobileNo ||
+                  selectedRecipient?.account ||
+                  "—"
+                : recipientDetails.mobileNo.trim() ||
+                  recipientDetails.accountNumber.trim() ||
+                  selectedRecipient?.mobileNo ||
+                  selectedRecipient?.account ||
+                  "—"
+            : confirmedTx
+            ? confirmedTx.accountNumber?.trim() ||
+              confirmedTx.iban?.trim() ||
+              recipientDetails.accountNumber.trim() ||
+              recipientDetails.iban.trim() ||
+              selectedRecipient?.account ||
+              selectedRecipient?.iban ||
+              "—"
+            : recipientDetails.accountNumber.trim() ||
+              recipientDetails.iban.trim() ||
+              selectedRecipient?.account ||
+              selectedRecipient?.iban ||
+              "—";
 
 
 
@@ -2344,6 +2727,7 @@ export default function SendMoney() {
                 ...(promoApplied && promoCode ? { promoCode, feeBeforePromo: fee.toFixed(2), ...(promoOnAmount ? { promoAppliesTo: "amount" as const, promoDiscount: amountPromoDiscount.toFixed(2) } : {}) } : {}),
             });
             gatewaySessionActiveRef.current = false;
+            clearActiveGatewaySession();
             setTransactionId(created.id);
             setTransactionRef(created.reference);
             if (created.mitoRateId) setLockedRateId(created.mitoRateId);
@@ -2490,6 +2874,8 @@ export default function SendMoney() {
     };
 
     const handleCancelConfirm = async (_transactionId: string): Promise<void> => {
+        gatewaySessionActiveRef.current = false;
+        clearActiveGatewaySession();
         // Cancel the real server-owned transaction — the bell notification is
         // dispatched server-side with the same payload shape this page used to
         // send itself, and the Dashboard picks the change up via polling.
@@ -4332,7 +4718,7 @@ export default function SendMoney() {
                                 className="grid grid-cols-1 lg:grid-cols-5 gap-6 pb-24"
                             >
                                 {/* Left Column: Input Sections (or Full-Width World-Class Status View when paymentOutcome is active) */}
-                                <div className={paymentOutcome ? "lg:col-span-5 max-w-4xl mx-auto w-full space-y-6" : "lg:col-span-3 space-y-6"}>
+                                <div className={paymentOutcome || resolvingCardRedirect ? "lg:col-span-5 max-w-4xl mx-auto w-full space-y-6" : "lg:col-span-3 space-y-6"}>
 
                                     {/* Promo & Bonus are selected on Step 1 and summarized in the right-hand Amount Summary */}
 
@@ -4340,7 +4726,7 @@ export default function SendMoney() {
                                     {/* Promo Code Section (features/promo) */}
 
 
-                                    {beneficiaryCreatedSuccess && !paymentOutcome && (
+                                    {beneficiaryCreatedSuccess && !paymentOutcome && !resolvingCardRedirect && (
                                         <div
                                             role="status"
                                             data-testid="step4-beneficiary-created-banner"
@@ -4363,7 +4749,7 @@ export default function SendMoney() {
                                     )}
 
                                     {/* Shared Rewards & Discounts Selector on Step 4 (post-KYC / post-Add Beneficiary) */}
-                                    {!paymentOutcome && !mitoCardPaymentSession && (
+                                    {!paymentOutcome && !resolvingCardRedirect && !mitoCardPaymentSession && (
                                         <Card data-testid="step4-rewards-card" className="border-slate-200/90 shadow-2xs">
                                             <CardContent className="p-4 sm:p-5 space-y-3.5">
                                                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -4642,11 +5028,11 @@ export default function SendMoney() {
                                                                 </span>
                                                                 <div className="flex flex-wrap items-baseline gap-2">
                                                                     <span className="text-xl sm:text-2xl font-extrabold tabular-nums text-white whitespace-nowrap">
-                                                                        {sendSymbol}
-                                                                        {Math.max(0, totalPay).toFixed(2)}
+                                                                        {outcomeSendSymbol}
+                                                                        {outcomeTotalPay.toFixed(2)}
                                                                     </span>
                                                                     <span className="text-xs font-bold uppercase px-2 py-0.5 rounded bg-white/15 text-white/90 shrink-0">
-                                                                        {SEND_CURRENCY}
+                                                                        {outcomeSendCurrency}
                                                                     </span>
                                                                 </div>
                                                                 <span className="text-xs text-white/75 block truncate">
@@ -4659,8 +5045,8 @@ export default function SendMoney() {
                                                                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 border border-white/20 text-xs font-semibold text-white whitespace-nowrap">
                                                                     <ArrowRightLeft className="w-3.5 h-3.5 text-white/80 shrink-0" />
                                                                     <span>
-                                                                        {sendSymbol}1 = {receiveSymbol}
-                                                                        {EXCHANGE_RATE.toFixed(2)}
+                                                                        {outcomeSendSymbol}1 = {outcomeReceiveSymbol}
+                                                                        {outcomeExchangeRate.toFixed(2)}
                                                                     </span>
                                                                 </div>
                                                                 <span className="text-[11px] text-white/70 font-medium whitespace-nowrap">
@@ -4675,27 +5061,15 @@ export default function SendMoney() {
                                                                 </span>
                                                                 <div className="flex flex-wrap md:justify-end items-baseline gap-2">
                                                                     <span className="text-xl sm:text-2xl font-extrabold tabular-nums text-emerald-200 whitespace-nowrap">
-                                                                        {receiveSymbol}
-                                                                        {finalReceiveAmount}
+                                                                        {outcomeReceiveSymbol}
+                                                                        {outcomeFinalReceiveAmount}
                                                                     </span>
                                                                     <span className="text-xs font-bold uppercase px-2 py-0.5 rounded bg-emerald-400/20 border border-emerald-300/30 text-emerald-100 shrink-0">
-                                                                        {recipientDetails.currency || "NGN"}
+                                                                        {outcomeReceiveCurrency}
                                                                     </span>
                                                                 </div>
                                                                 <span className="text-xs text-white/80 block truncate">
-                                                                    To{" "}
-                                                                    {beneficiaryType === "business"
-                                                                        ? recipientDetails.companyName.trim() ||
-                                                                          selectedRecipient?.name ||
-                                                                          "Recipient"
-                                                                        : [
-                                                                              recipientDetails.firstName.trim(),
-                                                                              recipientDetails.lastName.trim(),
-                                                                          ]
-                                                                              .filter(Boolean)
-                                                                              .join(" ") ||
-                                                                          selectedRecipient?.name ||
-                                                                          "Recipient"}
+                                                                    To {outcomeHeroRecipientName}
                                                                 </span>
                                                             </div>
                                                         </div>
@@ -4824,7 +5198,7 @@ export default function SendMoney() {
                                                     </div>
 
                                                     {/* Promo Code / Referral Bonus Banner */}
-                                                    {(promoApplied || useBonus) && (
+                                                    {(outcomePromoApplied || outcomeUseBonus) && (
                                                         <div
                                                             data-testid="payment-status-reward-banner"
                                                             className={`rounded-2xl p-4 flex items-start gap-3 text-xs sm:text-sm ${
@@ -4845,25 +5219,25 @@ export default function SendMoney() {
                                                                 <p className="text-slate-700">
                                                                     {paymentOutcome.category === "completed" ||
                                                                     paymentOutcome.category === "processing"
-                                                                        ? promoApplied && useBonus
-                                                                            ? `Your promo code (${promoCode}) and Bonus ${
-                                                                                  bonusType === "pay_less" ? "discount" : "credit"
+                                                                        ? outcomePromoApplied && outcomeUseBonus
+                                                                            ? `Your promo code (${outcomePromoCode}) and Bonus ${
+                                                                                  outcomeBonusType === "pay_less" ? "discount" : "credit"
                                                                               } have been applied to this transfer.`
-                                                                            : promoApplied
-                                                                            ? `Your promo code (${promoCode}) saved you ${formatPromoMoney(
-                                                                                  promoDiscount,
-                                                                                  SEND_CURRENCY,
+                                                                            : outcomePromoApplied
+                                                                            ? `Your promo code (${outcomePromoCode}) saved you ${formatPromoMoney(
+                                                                                  outcomePromoDiscount,
+                                                                                  outcomeSendCurrency,
                                                                               ).replace(/^−/, "")} on this transfer.`
                                                                             : `Bonus ${
-                                                                                  bonusType === "pay_less" ? "discount" : "credit"
-                                                                              } (${sendSymbol}${bonusAmount.toFixed(
+                                                                                  outcomeBonusType === "pay_less" ? "discount" : "credit"
+                                                                              } (${outcomeSendSymbol}${outcomeBonusAmount.toFixed(
                                                                                   2,
                                                                               )}) has been applied to this transfer.`
-                                                                        : promoApplied
-                                                                        ? `Your promo code (${promoCode}) remains attached to this transfer and will automatically apply when you retry.`
+                                                                        : outcomePromoApplied
+                                                                        ? `Your promo code (${outcomePromoCode}) remains attached to this transfer and will automatically apply when you retry.`
                                                                         : `Your Referral / Bonus ${
-                                                                              bonusType === "pay_less" ? "discount" : "credit"
-                                                                          } (${sendSymbol}${bonusAmount.toFixed(
+                                                                              outcomeBonusType === "pay_less" ? "discount" : "credit"
+                                                                          } (${outcomeSendSymbol}${outcomeBonusAmount.toFixed(
                                                                               2,
                                                                           )}) remains attached to this transfer and will automatically apply when you retry.`}
                                                                 </p>
@@ -4900,40 +5274,40 @@ export default function SendMoney() {
                                                                 <div className="flex items-center justify-between">
                                                                     <span className="text-slate-500">You Send</span>
                                                                     <span className="font-semibold text-slate-900 tabular-nums">
-                                                                        {sendSymbol}
-                                                                        {youSendAmount.toFixed(2)} {SEND_CURRENCY}
+                                                                        {outcomeSendSymbol}
+                                                                        {outcomeYouSend.toFixed(2)} {outcomeSendCurrency}
                                                                     </span>
                                                                 </div>
                                                                 <div className="flex items-center justify-between">
                                                                     <span className="text-slate-500">Transfer Fee</span>
                                                                     <span className="font-semibold text-slate-900 tabular-nums">
-                                                                        {sendSymbol}
-                                                                        {effectiveFee.toFixed(2)} {SEND_CURRENCY}
+                                                                        {outcomeSendSymbol}
+                                                                        {outcomeEffectiveFee.toFixed(2)} {outcomeSendCurrency}
                                                                     </span>
                                                                 </div>
-                                                                {promoApplied && promoDiscount > 0 && (
+                                                                {outcomePromoApplied && outcomePromoDiscount > 0 && (
                                                                     <div className="flex items-center justify-between font-semibold text-emerald-700">
-                                                                        <span>{PROMO_COPY.summaryLabel(promoCode)}</span>
+                                                                        <span>{PROMO_COPY.summaryLabel(outcomePromoCode)}</span>
                                                                         <span className="tabular-nums">
-                                                                            −{formatPromoMoney(promoDiscount, SEND_CURRENCY).replace(/^−/, "")}
+                                                                            −{formatPromoMoney(outcomePromoDiscount, outcomeSendCurrency).replace(/^−/, "")}
                                                                         </span>
                                                                     </div>
                                                                 )}
-                                                                {useBonus && bonusType === "pay_less" && (
+                                                                {outcomeUseBonus && outcomeBonusType === "pay_less" && (
                                                                     <div className="flex items-center justify-between font-semibold text-teal-700">
                                                                         <span>{BONUS_COPY.summaryPayLess}</span>
                                                                         <span className="tabular-nums">
-                                                                            −{sendSymbol}
-                                                                            {bonusAmount.toFixed(2)}
+                                                                            −{outcomeSendSymbol}
+                                                                            {outcomeBonusAmount.toFixed(2)}
                                                                         </span>
                                                                     </div>
                                                                 )}
-                                                                {useBonus && bonusType === "send_more" && (
+                                                                {outcomeUseBonus && outcomeBonusType === "send_more" && (
                                                                     <div className="flex items-center justify-between font-semibold text-teal-700">
                                                                         <span>{BONUS_COPY.summarySendMore}</span>
                                                                         <span className="tabular-nums">
-                                                                            +{sendSymbol}
-                                                                            {bonusAmount.toFixed(2)}
+                                                                            +{outcomeSendSymbol}
+                                                                            {outcomeBonusAmount.toFixed(2)}
                                                                         </span>
                                                                     </div>
                                                                 )}
@@ -4944,16 +5318,16 @@ export default function SendMoney() {
                                                                             : "Total Amount"}
                                                                     </span>
                                                                     <span className="text-base font-extrabold text-slate-950 tabular-nums">
-                                                                        {sendSymbol}
-                                                                        {Math.max(0, totalPay).toFixed(2)} {SEND_CURRENCY}
+                                                                        {outcomeSendSymbol}
+                                                                        {outcomeTotalPay.toFixed(2)} {outcomeSendCurrency}
                                                                     </span>
                                                                 </div>
                                                                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
                                                                     <span className="text-slate-500">Recipient Receives</span>
                                                                     <span className="font-extrabold text-blue-600 tabular-nums">
-                                                                        {receiveSymbol}
-                                                                        {finalReceiveAmount} {recipientDetails.currency || "NGN"}
-                                                                        {useBonus && bonusType === "send_more" && (
+                                                                        {outcomeReceiveSymbol}
+                                                                        {outcomeFinalReceiveAmount} {outcomeReceiveCurrency}
+                                                                        {outcomeUseBonus && outcomeBonusType === "send_more" && (
                                                                             <span className="text-xs text-emerald-600 ml-1.5 font-bold">
                                                                                 (+Bonus)
                                                                             </span>
@@ -4971,7 +5345,7 @@ export default function SendMoney() {
                                                                         Beneficiary Settlement
                                                                     </span>
                                                                     <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full capitalize">
-                                                                        {deliveryMethod.replace("_", " ")}
+                                                                        {outcomeDeliveryMethod.replace("_", " ")}
                                                                     </span>
                                                                 </div>
 
@@ -4979,53 +5353,25 @@ export default function SendMoney() {
                                                                     <div className="flex items-center justify-between gap-2">
                                                                         <span className="text-slate-500 shrink-0">Recipient</span>
                                                                         <span className="font-bold text-slate-900 text-right truncate">
-                                                                            {beneficiaryType === "business"
-                                                                                ? recipientDetails.companyName.trim() ||
-                                                                                  selectedRecipient?.name ||
-                                                                                  "—"
-                                                                                : [
-                                                                                      recipientDetails.firstName.trim(),
-                                                                                      recipientDetails.lastName.trim(),
-                                                                                  ]
-                                                                                      .filter(Boolean)
-                                                                                      .join(" ") ||
-                                                                                  selectedRecipient?.name ||
-                                                                                  "—"}
+                                                                            {outcomeRecipientName}
                                                                         </span>
                                                                     </div>
                                                                     <div className="flex items-center justify-between gap-2">
                                                                         <span className="text-slate-500 shrink-0">
-                                                                            {deliveryMethod === "mobile_money"
+                                                                            {outcomeDeliveryMethod === "mobile_money"
                                                                                 ? "Mobile Operator"
                                                                                 : "Bank Name"}
                                                                         </span>
                                                                         <span className="font-medium text-slate-900 text-right truncate">
-                                                                            {recipientDetails.bankName.trim() ||
-                                                                                selectedRecipient?.bank ||
-                                                                                "—"}
+                                                                            {outcomeBankName}
                                                                         </span>
                                                                     </div>
                                                                     <div className="flex items-center justify-between gap-2">
                                                                         <span className="text-slate-500 shrink-0">
-                                                                            {deliveryMethod === "mobile_money"
-                                                                                ? "Mobile Number"
-                                                                                : recipientDetails.iban.trim() &&
-                                                                                  !recipientDetails.accountNumber.trim()
-                                                                                ? "IBAN"
-                                                                                : "Account Number"}
+                                                                            {outcomeAccountLabel}
                                                                         </span>
                                                                         <span className="font-mono font-bold text-slate-900 text-right">
-                                                                            {deliveryMethod === "mobile_money"
-                                                                                ? recipientDetails.mobileNo.trim() ||
-                                                                                  recipientDetails.accountNumber.trim() ||
-                                                                                  selectedRecipient?.mobileNo ||
-                                                                                  selectedRecipient?.account ||
-                                                                                  "—"
-                                                                                : recipientDetails.accountNumber.trim() ||
-                                                                                  recipientDetails.iban.trim() ||
-                                                                                  selectedRecipient?.account ||
-                                                                                  selectedRecipient?.iban ||
-                                                                                  "—"}
+                                                                            {outcomeAccountValue}
                                                                         </span>
                                                                     </div>
                                                                 </div>
@@ -5171,6 +5517,25 @@ export default function SendMoney() {
                                                 </div>
                                             </div>
                                         </motion.div>
+                                    ) : resolvingCardRedirect ? (
+                                        <Card
+                                            data-testid="card-redirect-verifying"
+                                            className="rounded-3xl border border-slate-200/90 bg-white shadow-xl shadow-slate-900/5 overflow-hidden"
+                                        >
+                                            <CardContent className="py-16 px-6 flex flex-col items-center justify-center text-center space-y-4">
+                                                <div className="w-14 h-14 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center">
+                                                    <Loader2 className="w-7 h-7 text-blue-600 animate-spin" />
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <h2 className="text-lg sm:text-xl font-bold text-slate-900">
+                                                        Verifying your card payment…
+                                                    </h2>
+                                                    <p className="text-xs sm:text-sm text-slate-500 max-w-md">
+                                                        Please wait a moment while we confirm your 3D Secure authorization with your card issuer.
+                                                    </p>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
                                     ) : (
                                     <Card>
                                         <CardHeader>
@@ -5185,6 +5550,7 @@ export default function SendMoney() {
                                                         <button
                                                             type="button"
                                                             onClick={() => {
+                                                                clearActiveGatewaySession();
                                                                 if (gatewaySessionActiveRef.current && transactionId) {
                                                                     gatewaySessionActiveRef.current = false;
                                                                     void confirmSendMoneyGateway(transactionId, {
@@ -5295,6 +5661,16 @@ export default function SendMoney() {
                                                             void rewards.refetch();
                                                             if (method.id === "card" && paidTx?.mitoPaymentSession) {
                                                                 gatewaySessionActiveRef.current = true;
+                                                                saveActiveGatewaySession({
+                                                                    transactionId: paidTx.id || transactionId || "",
+                                                                    reference: paidTx.reference || transactionRef || "",
+                                                                    mitoReference: paidTx.mitoReference || null,
+                                                                    sessionId:
+                                                                        String(
+                                                                            (paidTx.mitoPaymentSession as Record<string, unknown>)?.id || "",
+                                                                        ) || null,
+                                                                    paymentMethod: method.id,
+                                                                });
                                                                 setMitoCardPaymentSession(paidTx.mitoPaymentSession);
                                                                 return;
                                                             }
@@ -5309,6 +5685,13 @@ export default function SendMoney() {
                                                                     : null;
                                                             if (hostedCardUrl) {
                                                                 gatewaySessionActiveRef.current = true;
+                                                                saveActiveGatewaySession({
+                                                                    transactionId: paidTx?.id || transactionId || "",
+                                                                    reference: paidTx?.reference || transactionRef || "",
+                                                                    mitoReference: paidTx?.mitoReference || null,
+                                                                    sessionId: paidTx?.mitoPaymentReference || null,
+                                                                    paymentMethod: method.id,
+                                                                });
                                                                 setMitoPayByBankUrl(hostedCardUrl);
                                                                 return;
                                                             }
@@ -5323,6 +5706,13 @@ export default function SendMoney() {
                                                                     : null;
                                                             if (instantBankUrl) {
                                                                 gatewaySessionActiveRef.current = true;
+                                                                saveActiveGatewaySession({
+                                                                    transactionId: paidTx?.id || transactionId || "",
+                                                                    reference: paidTx?.reference || transactionRef || "",
+                                                                    mitoReference: paidTx?.mitoReference || null,
+                                                                    sessionId: paidTx?.mitoPaymentReference || null,
+                                                                    paymentMethod: method.id,
+                                                                });
                                                                 setMitoPayByBankUrl(instantBankUrl);
                                                                 return;
                                                             }
@@ -5475,7 +5865,7 @@ export default function SendMoney() {
                                     )}
 
 
-                                    {!paymentOutcome && (
+                                    {!paymentOutcome && !resolvingCardRedirect && (
                                         <div className="mt-6 flex items-start gap-2 p-4 bg-yellow-50 rounded-lg text-yellow-800 text-sm">
                                             <Shield className="w-4 h-4 mt-0.5 shrink-0" />
                                             <p>By selecting a payment option, you agree to our Terms of Use and Privacy Policy. Funds are usually delivered within minutes.</p>
@@ -5484,7 +5874,7 @@ export default function SendMoney() {
                                 </div>
 
                                 {/* Right Column: Amount Summary (Sticky) */}
-                                {!paymentOutcome && (
+                                {!paymentOutcome && !resolvingCardRedirect && (
                                 <div className="lg:col-span-2">
                                     <div className="sticky top-6 space-y-6">
                                         <Card className="rounded-xl border border-[#efefee] bg-white shadow-[-2px_4px_16px_0px_rgba(0,0,0,0.04)]">
@@ -5893,14 +6283,17 @@ export default function SendMoney() {
                                         {/* Primary CTA: I have made the Payment */}
                                         {!transferComplete ? (
                                             <button
+                                                data-testid="button-manual-transfer-made-payment"
                                                 onClick={() => {
                                                     setTransferComplete(true);
                                                     setPaymentTimerActive(false);
+                                                    setShowBankTransferPage(false);
                                                     syncSendMoneyCache();
                                                     toast({
                                                         title: "Payment confirmation received",
                                                         description: "We are verifying your bank transfer and processing your transaction.",
                                                     });
+                                                    setLocation("/");
                                                 }}
                                                 className="w-full py-3.5 px-6 rounded-xl bg-[#2563EB] hover:bg-blue-700 active:scale-[0.99] text-white font-bold text-sm sm:text-base shadow-xs transition-all text-center cursor-pointer"
                                             >

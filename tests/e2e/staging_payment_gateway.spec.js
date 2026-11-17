@@ -201,4 +201,110 @@ test.describe('Staging Payment Gateway & Recent Transactions Sorting E2E', () =>
         await expect.poll(() => confirmGatewayPayload?.outcome).toBe('completed');
         await expect(page.getByText('Payment Successful').first()).toBeVisible({ timeout: 10000 });
     });
+
+    test('Card 3DS return to /send/status marks transfer completed, stays off /send-money, hydrates receipt, and auto-redirects to Dashboard', async ({ page }) => {
+        const paidIso = new Date().toISOString();
+        let confirmedTargetId = null;
+        let confirmPayload = null;
+
+        await page.route('**/api/send-money/transactions/*/confirm-gateway', async (route) => {
+            const urlParts = route.request().url().split('/');
+            confirmedTargetId = urlParts[urlParts.length - 2];
+            confirmPayload = route.request().postDataJSON();
+            await route.fulfill(
+                json({
+                    data: {
+                        id: 'tx-card-paid-1',
+                        reference: 'TXN-CARD-PAID-1',
+                        recipientName: 'Akshita Sharma',
+                        service: 'bank_deposit',
+                        paymentMethod: 'card',
+                        sendCurrency: 'GBP',
+                        sendAmount: '250.00',
+                        receiveCurrency: 'NGN',
+                        receiveAmount: '457502.50',
+                        fee: '2.00',
+                        exchangeRate: '1830.01',
+                        bankName: 'United Bank for Africa Plc (UBA)',
+                        accountNumber: '1018316888',
+                        mitoTransactionId: '22505775',
+                        status: 'completed',
+                        createdAt: paidIso,
+                        paidAt: paidIso,
+                    },
+                }),
+            );
+        });
+
+        await page.route('**/api/send-money/transactions', async (route) => {
+            if (route.request().method() === 'GET') {
+                await route.fulfill(
+                    json({
+                        data: [
+                            {
+                                id: 'tx-card-paid-1',
+                                reference: 'TXN-CARD-PAID-1',
+                                recipientName: 'Akshita Sharma',
+                                service: 'bank_deposit',
+                                paymentMethod: 'card',
+                                sendCurrency: 'GBP',
+                                sendAmount: '250.00',
+                                receiveCurrency: 'NGN',
+                                receiveAmount: '457502.50',
+                                fee: '2.00',
+                                exchangeRate: '1830.01',
+                                status: 'completed',
+                                createdAt: paidIso,
+                                paidAt: paidIso,
+                            },
+                        ],
+                        meta: { total: 1 },
+                    }),
+                );
+            } else {
+                await route.continue();
+            }
+        });
+
+        await page.goto('/send/status?tnxref=22505775&status=COMPSUCCESS&paymentStatus=Captured');
+
+        await expect.poll(() => confirmPayload?.outcome).toBe('completed');
+        expect(confirmedTargetId).toBe('22505775');
+        expect(new URL(page.url()).pathname).toBe('/send/status');
+
+        const statusView = page.getByTestId('payment-status-view');
+        await expect(statusView).toBeVisible({ timeout: 10000 });
+        await expect(statusView).toHaveAttribute('data-status-category', 'completed');
+        await expect(statusView).toContainText('Payment Successful');
+        await expect(statusView).toContainText('TXN-CARD-PAID-1');
+        await expect(statusView).toContainText('250.00');
+        await expect(statusView).toContainText('Akshita Sharma');
+
+        // Option A: auto-redirects to Dashboard ("/") after the 6s countdown
+        await expect(page).toHaveURL(/\/$/, { timeout: 12000 });
+        await expect(page.getByTestId('row-transaction-TXN-CARD-PAID-1')).toBeVisible({ timeout: 10000 });
+    });
+
+    test('Option A Manual Bank Transfer "I have made the Payment" confirms toast and redirects to Dashboard', async ({ page }) => {
+        await mockBeneficiaries(page);
+
+        await page.goto('/send-money');
+        await page.getByPlaceholder('0.00').first().fill('100');
+        await page.getByRole('button', { name: 'Continue' }).click();
+
+        await page.getByText('Akshita', { exact: true }).first().click();
+        await expect(page.getByText('Recipient Details').first()).toBeVisible();
+        await page.getByRole('button', { name: 'Continue' }).click();
+
+        await expect(page.getByText('How would you like to pay?')).toBeVisible({ timeout: 15000 });
+        await page.getByText('Manual Bank Transfer').click();
+        await page.getByRole('button', { name: 'Proceed' }).click();
+
+        const madePaymentBtn = page.getByTestId('button-manual-transfer-made-payment');
+        await expect(madePaymentBtn).toBeVisible({ timeout: 10000 });
+        await madePaymentBtn.click();
+
+        await expect(page.getByText('Payment confirmation received').first()).toBeVisible({ timeout: 10000 });
+        await expect(page).toHaveURL(/\/$/, { timeout: 10000 });
+    });
 });

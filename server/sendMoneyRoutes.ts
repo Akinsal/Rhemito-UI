@@ -167,8 +167,25 @@ function notificationData(tx: SendMoneyTransaction) {
 }
 
 async function getOwnedTransaction(idOrReference: string, userId: string): Promise<SendMoneyTransaction> {
-  const direct = await storage.getSendMoneyTransactionById(idOrReference);
-  const tx = direct ?? (await storage.listSendMoneyTransactionsByOwner(userId)).find((t) => t.reference === idOrReference);
+  const clean = String(idOrReference || "").trim();
+  if (!clean) {
+    throw new SendMoneyError(404, "NOT_FOUND", "Transaction not found.");
+  }
+  const direct = await storage.getSendMoneyTransactionById(clean);
+  const tx =
+    direct ??
+    (await storage.listSendMoneyTransactionsByOwner(userId)).find(
+      (t) =>
+        t.reference === clean ||
+        Boolean(t.mitoTransactionId && String(t.mitoTransactionId).trim() === clean) ||
+        Boolean(t.mitoReference && String(t.mitoReference).trim() === clean) ||
+        Boolean(t.mitoPaymentReference && String(t.mitoPaymentReference).trim() === clean) ||
+        Boolean(
+          t.mitoPaymentSession &&
+            typeof (t.mitoPaymentSession as Record<string, unknown>).id === "string" &&
+            String((t.mitoPaymentSession as Record<string, unknown>).id).trim() === clean,
+        ),
+    );
   if (!tx || tx.ownerId !== userId) {
     throw new SendMoneyError(404, "NOT_FOUND", "Transaction not found.");
   }
@@ -879,6 +896,7 @@ export function registerSendMoneyRoutes(app: Express): void {
       const rawUrl = String(req.body?.url || "").trim();
       const paymentId = String(req.body?.paymentId || "").trim();
       const sessionId = String(req.body?.sessionId || "").trim();
+      const txId = String(req.body?.txId || "").trim();
       const redirectReason = String(req.body?.redirectReason || "").trim();
 
       const extractOutcomeFromUrlString = (urlStr: string) => {
@@ -916,6 +934,7 @@ export function registerSendMoneyRoutes(app: Express): void {
           return {
             hostname: parsed.hostname.toLowerCase(),
             pathname: parsed.pathname,
+            txId: getParam("txId", "transactionId"),
             tnxref: getParam(
               "tnxref",
               "orderNo",
@@ -928,6 +947,8 @@ export function registerSendMoneyRoutes(app: Express): void {
             status: getParam("status", "orderStatus", "journeyStatus"),
             paymentStatus: getParam("paymentStatus", "cko-payment-status"),
             ckoSessionId: getParam("cko-session-id", "cko-payment-id"),
+            ckoPaymentId: getParam("cko-payment-id"),
+            cardRedirect: getParam("cardRedirect"),
             reason: getParam("reason", "error", "message", "declined_reason"),
             journeyCode: getParam("journeyCode", "journey_code"),
           };
@@ -947,10 +968,13 @@ export function registerSendMoneyRoutes(app: Express): void {
           outcome = {
             hostname: info.hostname,
             pathname: info.pathname,
+            txId: info.txId || outcome?.txId || null,
             tnxref: info.tnxref || outcome?.tnxref || null,
             status: info.status || outcome?.status || null,
             paymentStatus: info.paymentStatus || outcome?.paymentStatus || null,
             ckoSessionId: info.ckoSessionId || outcome?.ckoSessionId || null,
+            ckoPaymentId: info.ckoPaymentId || outcome?.ckoPaymentId || null,
+            cardRedirect: info.cardRedirect || outcome?.cardRedirect || null,
             reason: info.reason || outcome?.reason || null,
             journeyCode: info.journeyCode || outcome?.journeyCode || null,
           };
@@ -982,10 +1006,13 @@ export function registerSendMoneyRoutes(app: Express): void {
               outcome = {
                 hostname: nextInfo.hostname,
                 pathname: nextInfo.pathname,
+                txId: nextInfo.txId || outcome?.txId || null,
                 tnxref: nextInfo.tnxref || outcome?.tnxref || null,
                 status: nextInfo.status || outcome?.status || null,
                 paymentStatus: nextInfo.paymentStatus || outcome?.paymentStatus || null,
                 ckoSessionId: nextInfo.ckoSessionId || outcome?.ckoSessionId || null,
+                ckoPaymentId: nextInfo.ckoPaymentId || outcome?.ckoPaymentId || null,
+                cardRedirect: nextInfo.cardRedirect || outcome?.cardRedirect || null,
                 reason: nextInfo.reason || outcome?.reason || null,
                 journeyCode: nextInfo.journeyCode || outcome?.journeyCode || null,
               };
@@ -1008,10 +1035,111 @@ export function registerSendMoneyRoutes(app: Express): void {
           ? "CANCELLED"
           : null);
 
+      let matchedTx: SendMoneyTransaction | null = null;
+      try {
+        const userId = requireStrictAuth(req);
+        const lookupKeys = [
+          txId,
+          outcome?.txId || "",
+          outcome?.tnxref || "",
+          outcome?.ckoSessionId || "",
+          outcome?.ckoPaymentId || "",
+          sessionId,
+          paymentId,
+        ]
+          .map((v) => String(v || "").trim())
+          .filter(Boolean);
+        for (const key of lookupKeys) {
+          try {
+            matchedTx = await getOwnedTransaction(key, userId);
+            if (matchedTx) break;
+          } catch {
+            // ignore 404 and try next key
+          }
+        }
+      } catch {
+        // unauthenticated or lookup error — proceed without matchedTx
+      }
+
+      let resolvedStatus = effectiveStatus;
+      let resolvedPaymentStatus = outcome?.paymentStatus || null;
+      let verifiedPaymentId: string | null = null;
+
+      if (
+        !resolvedStatus &&
+        !outcome?.reason &&
+        !(outcome?.hostname || "").endsWith("checkout.com") &&
+        matchedTx
+      ) {
+        if (matchedTx.status === "completed") {
+          resolvedStatus = "COMPSUCCESS";
+          resolvedPaymentStatus = "Captured";
+          verifiedPaymentId =
+            matchedTx.mitoPaymentReference || outcome?.ckoPaymentId || paymentId || null;
+        } else {
+          const psObj = matchedTx.mitoPaymentSession as Record<string, unknown> | null | undefined;
+          const psId = String(psObj?.id || "").trim();
+          const psSecret = String(psObj?.payment_session_secret || "").trim();
+          const pubKey = String(
+            matchedTx.mitoCheckoutPublicKey || "pk_sbox_hxdmemjidz7nf3sfukhia4igsuf",
+          ).trim();
+          const canVerifyLiveCko =
+            Boolean(psId && psSecret) &&
+            (!process.env.VITEST || process.env.CKO_ALLOW_IN_VITEST === "1");
+          if (canVerifyLiveCko) {
+            try {
+              const ckoRes = await fetch(
+                `https://api.sandbox.checkout.com/payment-sessions/${encodeURIComponent(psId)}`,
+                {
+                  method: "GET",
+                  headers: {
+                    Authorization: `Bearer ${pubKey}`,
+                    "cko-payment-session-secret": psSecret,
+                  },
+                  signal: AbortSignal.timeout(6000),
+                },
+              );
+              const ckoBody = (await ckoRes.json().catch(() => null)) as Record<string, unknown> | null;
+              if (
+                ckoRes.ok &&
+                typeof ckoBody?.payment_id === "string" &&
+                ckoBody.payment_id.trim().startsWith("pay_")
+              ) {
+                verifiedPaymentId = ckoBody.payment_id.trim();
+                resolvedStatus = "COMPSUCCESS";
+                resolvedPaymentStatus = "Captured";
+              } else if (!ckoRes.ok && (outcome?.ckoPaymentId || "").startsWith("pay_")) {
+                verifiedPaymentId = outcome!.ckoPaymentId!;
+                resolvedStatus = "COMPSUCCESS";
+                resolvedPaymentStatus = "Captured";
+              }
+            } catch {
+              if ((outcome?.ckoPaymentId || "").startsWith("pay_")) {
+                verifiedPaymentId = outcome!.ckoPaymentId!;
+                resolvedStatus = "COMPSUCCESS";
+                resolvedPaymentStatus = "Captured";
+              }
+            }
+          } else if ((outcome?.ckoPaymentId || "").startsWith("pay_")) {
+            verifiedPaymentId = outcome!.ckoPaymentId!;
+            resolvedStatus = "COMPSUCCESS";
+            resolvedPaymentStatus = "Captured";
+          }
+        }
+      }
+
       return res.json({
-        tnxref: outcome?.tnxref || null,
-        status: effectiveStatus,
-        paymentStatus: outcome?.paymentStatus || null,
+        tnxref:
+          outcome?.tnxref ||
+          matchedTx?.mitoTransactionId ||
+          matchedTx?.mitoReference ||
+          matchedTx?.reference ||
+          null,
+        transactionId: matchedTx?.id || null,
+        reference: matchedTx?.reference || null,
+        paymentId: verifiedPaymentId || outcome?.ckoPaymentId || paymentId || null,
+        status: resolvedStatus,
+        paymentStatus: resolvedPaymentStatus,
         ckoSessionId: outcome?.ckoSessionId || sessionId || paymentId || null,
         reason: outcome?.reason || null,
         journeyCode: outcome?.journeyCode || null,
@@ -1684,10 +1812,13 @@ export function registerSendMoneyRoutes(app: Express): void {
         const origin =
           (req && typeof req.headers.origin === "string" && req.headers.origin) ||
           (req && req.get("host") ? `${req.protocol}://${req.get("host")}` : "http://localhost:5000");
-        const rawRedirectSuccessUrl = `${origin.replace(/\/+$/, "")}/send-money`;
-        const redirectSuccessUrl = /localhost|127\.0\.0\.1/i.test(rawRedirectSuccessUrl)
-          ? "https://rhemito-ui.onrender.com/send-money"
-          : rawRedirectSuccessUrl;
+        const cleanOrigin = origin.replace(/\/+$/, "");
+        const redirectSuccessUrl =
+          mitoPaymentMethod === "CARDCHECKOUT"
+            ? `${cleanOrigin}/send/status`
+            : /localhost|127\.0\.0\.1/i.test(cleanOrigin)
+              ? "https://rhemito-ui.onrender.com/send-money"
+              : `${cleanOrigin}/send-money`;
 
         const sent = await sendMitoTransaction({
           userId: mitoUserId,
@@ -2099,6 +2230,7 @@ export function registerSendMoneyRoutes(app: Express): void {
     paymentStatus: z.string().trim().max(120).optional(),
     paymentId: z.string().trim().max(160).optional(),
     sessionId: z.string().trim().max(160).optional(),
+    tnxref: z.string().trim().max(160).optional(),
     journeyCode: z.string().trim().max(160).optional(),
     reason: z.string().trim().max(500).optional(),
   });
@@ -2111,7 +2243,32 @@ export function registerSendMoneyRoutes(app: Express): void {
   app.post("/api/send-money/transactions/:id/confirm-gateway", async (req: Request, res: Response) => {
     try {
       const userId = requireStrictAuth(req);
-      const tx = await getOwnedTransaction(req.params.id, userId);
+      let tx: SendMoneyTransaction | undefined;
+      try {
+        tx = await getOwnedTransaction(req.params.id, userId);
+      } catch (err) {
+        if (!(err instanceof SendMoneyError && err.status === 404)) {
+          throw err;
+        }
+        const fallbackCandidates = [
+          typeof req.body?.tnxref === "string" ? req.body.tnxref.trim() : "",
+          typeof req.body?.sessionId === "string" ? req.body.sessionId.trim() : "",
+          typeof req.body?.paymentId === "string" ? req.body.paymentId.trim() : "",
+        ].filter(Boolean);
+        for (const candidate of fallbackCandidates) {
+          try {
+            tx = await getOwnedTransaction(candidate, userId);
+            break;
+          } catch (fallbackErr) {
+            if (!(fallbackErr instanceof SendMoneyError && fallbackErr.status === 404)) {
+              throw fallbackErr;
+            }
+          }
+        }
+        if (!tx) {
+          throw err;
+        }
+      }
       const parsed = confirmSendMoneyGatewaySchema.safeParse(req.body ?? {});
       if (!parsed.success) {
         throw new SendMoneyError(400, "VALIDATION_ERROR", firstZodMessage(parsed.error));
@@ -2413,10 +2570,15 @@ export function registerSendMoneyRoutes(app: Express): void {
 
         if (matchedTransaction) {
           const effectiveStatus = dataStatusLower || eventTypeLower;
+          const preserveExistingMitoTxId =
+            (effectiveStatus === "transaction_initiated" || effectiveStatus === "initiated") &&
+            Boolean(matchedTransaction.mitoTransactionId);
           const txPatch: Partial<Omit<SendMoneyTransaction, "id">> = {
             ...(transactionRef
               ? {
-                  mitoTransactionId: transactionRef,
+                  mitoTransactionId: preserveExistingMitoTxId
+                    ? matchedTransaction.mitoTransactionId
+                    : transactionRef,
                   mitoReference: matchedTransaction.mitoReference || transactionRef,
                 }
               : {}),
@@ -2435,7 +2597,15 @@ export function registerSendMoneyRoutes(app: Express): void {
             effectiveStatus === "paid" ||
             effectiveStatus === "successful" ||
             effectiveStatus === "settled" ||
-            effectiveStatus === "success"
+            effectiveStatus === "success" ||
+            (!isKycEvent &&
+              (effectiveStatus === "approved" ||
+                effectiveStatus === "authorized" ||
+                effectiveStatus === "captured" ||
+                effectiveStatus === "readytoprocess" ||
+                effectiveStatus === "ready_to_process" ||
+                effectiveStatus === "awaitingaffiliateupdate" ||
+                effectiveStatus === "awaiting_affiliate_update"))
           ) {
             const wasCompleted = matchedTransaction.status === "completed";
             const now = new Date();

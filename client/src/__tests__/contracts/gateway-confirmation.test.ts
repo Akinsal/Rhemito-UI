@@ -288,4 +288,51 @@ describe("Two-Phase Card 3DS & Gateway Confirmation (Option A)", () => {
       restore();
     }
   });
+
+  it("sets CARDCHECKOUT RedirectSuccessUrl to Rhemito-UI /send/status and completes transaction by Mito tnxref on return", async () => {
+    enableMitoRetailAgainstStub();
+    const restore = routeBrowserFetchTo(ctx.base);
+    try {
+      const tx = await ctx.newTx({
+        beneficiaryId: "ben_uba_1",
+        providerId: "prov_uba_1",
+        affiliateRateId: "rate_init_1",
+      });
+
+      const paid = await paySendMoneyTransaction(tx.id, "card");
+      expect(paid.status).toBe("awaiting_payment");
+      expect(paid.mitoTransactionId).toBe("22505752");
+
+      const sendMoneyCalls = ctx.stub.to("/api/v1/Transaction/SendMoney");
+      expect(sendMoneyCalls).toHaveLength(1);
+      expect(sendMoneyCalls[0].body.RedirectSuccessUrl).toBe(`${ctx.base}/send/status`);
+      expect(String(sendMoneyCalls[0].body.RedirectSuccessUrl)).not.toContain("rhemito-web-nextjs-dev");
+      expect(String(sendMoneyCalls[0].body.RedirectSuccessUrl)).not.toContain("/send-money");
+
+      const resolved = await ctx.api("POST", "/api/send-money/mito/resolve-card-redirect", {
+        url: `${ctx.base}/send/status?tnxref=22505752&status=COMPSUCCESS&paymentStatus=Captured`,
+      });
+      expect(resolved.status).toBe(200);
+      expect(resolved.body).toMatchObject({
+        tnxref: "22505752",
+        transactionId: tx.id,
+        reference: tx.reference,
+        status: "COMPSUCCESS",
+        paymentStatus: "Captured",
+      });
+
+      // Confirming via Mito tnxref (even if browser sessionStorage was cleared) completes the owned transaction
+      const confirmedByTnxref = await confirmSendMoneyGateway("22505752", {
+        outcome: "completed",
+        rawStatus: "COMPSUCCESS",
+        paymentStatus: "Captured",
+        tnxref: "22505752",
+      });
+      expect(confirmedByTnxref.id).toBe(tx.id);
+      expect(confirmedByTnxref.status).toBe("completed");
+      expect(confirmedByTnxref.paidAt).toEqual(expect.any(String));
+    } finally {
+      restore();
+    }
+  });
 });

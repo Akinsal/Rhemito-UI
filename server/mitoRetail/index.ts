@@ -1940,9 +1940,11 @@ export async function sendMitoTransaction(input: {
     `${serverConfig.publicBaseUrl.replace(/\/+$/, "")}/send-money`
   ).trim();
   const resolvedRedirectSuccessUrl =
-    /localhost|127\.0\.0\.1/i.test(rawRedirectCandidate)
-      ? "https://rhemito-ui.onrender.com/send-money"
-      : rawRedirectCandidate;
+    input.paymentMethod === "CARDCHECKOUT"
+      ? rawRedirectCandidate
+      : /localhost|127\.0\.0\.1/i.test(rawRedirectCandidate)
+        ? "https://rhemito-ui.onrender.com/send-money"
+        : rawRedirectCandidate;
 
   const buildPayload = (overrides?: {
     beneficiaryId?: string;
