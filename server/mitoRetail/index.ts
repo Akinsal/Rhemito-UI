@@ -2465,6 +2465,58 @@ export async function getMitoJourneyStatus(journeyCode: string): Promise<MitoJou
   }
 }
 
+/**
+ * Triggers Mito Staging's `[AllowAnonymous]` `GET /api/v1/Payment/CheckoutPaymentSatus?cko-session-id=<pay_...>`
+ * server-side (`redirect: "manual"`) so Mito's `CheckoutSatusRequesttHandler` enqueues `ProcessOrder(result.Id)`
+ * (setting `PaymentStatus = PAID` and `TransactionStatus = AWAITINGPROCESSING` / `INREVIEW`), while keeping the
+ * customer's browser on Rhemito-UI instead of following Mito's 302 redirect to `rhemito-web-nextjs-dev`.
+ */
+export async function syncMitoCardPaymentStatus(ckoIdOrPaymentId: string): Promise<{
+  tnxref: string | null;
+  status: string | null;
+  paymentStatus: string | null;
+  locationUrl: string | null;
+} | null> {
+  const cleanId = String(ckoIdOrPaymentId || "").trim();
+  if (!cleanId || cleanId.startsWith("ps_") || !isMitoRetailConfigured()) return null;
+  const creds = loadMitoRetailCredentials()!;
+  try {
+    const res = await fetch(
+      `${creds.baseUrl}/api/v1/Payment/CheckoutPaymentSatus?cko-session-id=${encodeURIComponent(cleanId)}`,
+      {
+        method: "GET",
+        redirect: "manual",
+        headers: {
+          Accept: "text/html,application/xhtml+xml,application/json,*/*",
+        },
+        signal: AbortSignal.timeout(8000),
+      },
+    );
+    const locationHeader = res.headers.get("location");
+    if (!locationHeader) return null;
+    const parsed = new URL(locationHeader, creds.baseUrl);
+    const tnxref = parsed.searchParams.get("tnxref")?.trim() || null;
+    const status = parsed.searchParams.get("status")?.trim() || null;
+    const paymentStatus = parsed.searchParams.get("paymentStatus")?.trim() || null;
+    log(
+      `✅ Mito GET /api/v1/Payment/CheckoutPaymentSatus synced (ckoId=${cleanId}, tnxref=${tnxref || "-"}, status=${status || "-"}, paymentStatus=${paymentStatus || "-"})`,
+      "mito-retail",
+    );
+    return {
+      tnxref,
+      status,
+      paymentStatus,
+      locationUrl: locationHeader,
+    };
+  } catch (err) {
+    log(
+      `ℹ️ Mito CheckoutPaymentSatus sync warning for ${cleanId}: ${(err as Error).message}`,
+      "mito-retail",
+    );
+    return null;
+  }
+}
+
 // ─── Mito Retail Webhook Signing, Verification & Inspector Log ────────────────
 
 const DEFAULT_MITO_WEBHOOK_SECRET_KEY = "f47ee7a1-aca4-4a6b-83a6-a802369bdddc";

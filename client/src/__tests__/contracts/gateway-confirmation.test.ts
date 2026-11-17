@@ -322,15 +322,23 @@ describe("Two-Phase Card 3DS & Gateway Confirmation (Option A)", () => {
       });
 
       // Confirming via Mito tnxref (even if browser sessionStorage was cleared) completes the owned transaction
+      // and triggers Mito's CheckoutPaymentSatus -> ProcessOrder settlement when paymentId is supplied
       const confirmedByTnxref = await confirmSendMoneyGateway("22505752", {
         outcome: "completed",
         rawStatus: "COMPSUCCESS",
         paymentStatus: "Captured",
+        paymentId: "pay_22505752_captured",
         tnxref: "22505752",
       });
       expect(confirmedByTnxref.id).toBe(tx.id);
       expect(confirmedByTnxref.status).toBe("completed");
       expect(confirmedByTnxref.paidAt).toEqual(expect.any(String));
+      expect(
+        ctx.stub.calls.some(
+          (c) =>
+            c.path === "/api/v1/Payment/CheckoutPaymentSatus?cko-session-id=pay_22505752_captured",
+        ),
+      ).toBe(true);
     } finally {
       restore();
     }

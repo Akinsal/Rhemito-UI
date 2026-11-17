@@ -54,6 +54,7 @@ import {
   sendMitoTransaction,
   serviceToMitoCollectionMode,
   signMitoWebhookPayload,
+  syncMitoCardPaymentStatus,
   toCountryIso3,
   verifyMitoWebhookSignature,
   type MitoSendMoneyPaymentMethod,
@@ -190,6 +191,49 @@ async function getOwnedTransaction(idOrReference: string, userId: string): Promi
     throw new SendMoneyError(404, "NOT_FOUND", "Transaction not found.");
   }
   return tx;
+}
+
+async function resolveCheckoutPaymentIdFromTx(tx: SendMoneyTransaction): Promise<{
+  paymentId: string | null;
+  checkedLiveCko: boolean;
+  ckoOk: boolean;
+}> {
+  const psObj = tx.mitoPaymentSession as Record<string, unknown> | null | undefined;
+  const psId = String(psObj?.id || "").trim();
+  const psSecret = String(psObj?.payment_session_secret || "").trim();
+  const pubKey = String(
+    tx.mitoCheckoutPublicKey || "pk_sbox_hxdmemjidz7nf3sfukhia4igsuf",
+  ).trim();
+  const canVerifyLiveCko =
+    Boolean(psId && psSecret) &&
+    (!process.env.VITEST || process.env.CKO_ALLOW_IN_VITEST === "1");
+  if (!canVerifyLiveCko) {
+    return { paymentId: null, checkedLiveCko: false, ckoOk: false };
+  }
+  try {
+    const ckoRes = await fetch(
+      `https://api.sandbox.checkout.com/payment-sessions/${encodeURIComponent(psId)}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${pubKey}`,
+          "cko-payment-session-secret": psSecret,
+        },
+        signal: AbortSignal.timeout(6000),
+      },
+    );
+    const ckoBody = (await ckoRes.json().catch(() => null)) as Record<string, unknown> | null;
+    if (
+      ckoRes.ok &&
+      typeof ckoBody?.payment_id === "string" &&
+      ckoBody.payment_id.trim().startsWith("pay_")
+    ) {
+      return { paymentId: ckoBody.payment_id.trim(), checkedLiveCko: true, ckoOk: true };
+    }
+    return { paymentId: null, checkedLiveCko: true, ckoOk: ckoRes.ok };
+  } catch {
+    return { paymentId: null, checkedLiveCko: true, ckoOk: false };
+  }
 }
 
 export function registerSendMoneyRoutes(app: Express): void {
@@ -1077,53 +1121,34 @@ export function registerSendMoneyRoutes(app: Express): void {
           verifiedPaymentId =
             matchedTx.mitoPaymentReference || outcome?.ckoPaymentId || paymentId || null;
         } else {
-          const psObj = matchedTx.mitoPaymentSession as Record<string, unknown> | null | undefined;
-          const psId = String(psObj?.id || "").trim();
-          const psSecret = String(psObj?.payment_session_secret || "").trim();
-          const pubKey = String(
-            matchedTx.mitoCheckoutPublicKey || "pk_sbox_hxdmemjidz7nf3sfukhia4igsuf",
-          ).trim();
-          const canVerifyLiveCko =
-            Boolean(psId && psSecret) &&
-            (!process.env.VITEST || process.env.CKO_ALLOW_IN_VITEST === "1");
-          if (canVerifyLiveCko) {
-            try {
-              const ckoRes = await fetch(
-                `https://api.sandbox.checkout.com/payment-sessions/${encodeURIComponent(psId)}`,
-                {
-                  method: "GET",
-                  headers: {
-                    Authorization: `Bearer ${pubKey}`,
-                    "cko-payment-session-secret": psSecret,
-                  },
-                  signal: AbortSignal.timeout(6000),
-                },
-              );
-              const ckoBody = (await ckoRes.json().catch(() => null)) as Record<string, unknown> | null;
-              if (
-                ckoRes.ok &&
-                typeof ckoBody?.payment_id === "string" &&
-                ckoBody.payment_id.trim().startsWith("pay_")
-              ) {
-                verifiedPaymentId = ckoBody.payment_id.trim();
-                resolvedStatus = "COMPSUCCESS";
-                resolvedPaymentStatus = "Captured";
-              } else if (!ckoRes.ok && (outcome?.ckoPaymentId || "").startsWith("pay_")) {
-                verifiedPaymentId = outcome!.ckoPaymentId!;
-                resolvedStatus = "COMPSUCCESS";
-                resolvedPaymentStatus = "Captured";
-              }
-            } catch {
-              if ((outcome?.ckoPaymentId || "").startsWith("pay_")) {
-                verifiedPaymentId = outcome!.ckoPaymentId!;
-                resolvedStatus = "COMPSUCCESS";
-                resolvedPaymentStatus = "Captured";
-              }
+          const ckoLookup = await resolveCheckoutPaymentIdFromTx(matchedTx);
+          const urlCkoCandidate = [
+            outcome?.ckoPaymentId || "",
+            paymentId,
+            outcome?.ckoSessionId || "",
+          ]
+            .map((v) => String(v || "").trim())
+            .find((v) => /^(pay_|sid_)/i.test(v));
+
+          if (ckoLookup.paymentId) {
+            verifiedPaymentId = ckoLookup.paymentId;
+          } else if ((!ckoLookup.checkedLiveCko || !ckoLookup.ckoOk) && urlCkoCandidate) {
+            verifiedPaymentId = urlCkoCandidate;
+          }
+
+          if (verifiedPaymentId) {
+            // Trigger Mito Staging's CheckoutPaymentSatus -> ProcessOrder(result.Id) so Mito
+            // marks the transaction PAID / AWAITINGPROCESSING / INREVIEW without redirecting the browser!
+            const mitoSynced = await syncMitoCardPaymentStatus(verifiedPaymentId);
+            if (mitoSynced?.status) {
+              resolvedStatus = mitoSynced.status;
+              resolvedPaymentStatus =
+                mitoSynced.paymentStatus ||
+                (mitoSynced.status === "COMPSUCCESS" ? "Captured" : null);
+            } else if (verifiedPaymentId.startsWith("pay_")) {
+              resolvedStatus = "COMPSUCCESS";
+              resolvedPaymentStatus = "Captured";
             }
-          } else if ((outcome?.ckoPaymentId || "").startsWith("pay_")) {
-            verifiedPaymentId = outcome!.ckoPaymentId!;
-            resolvedStatus = "COMPSUCCESS";
-            resolvedPaymentStatus = "Captured";
           }
         }
       }
@@ -2284,13 +2309,27 @@ export function registerSendMoneyRoutes(app: Express): void {
         if (tx.status === "cancelled") {
           throw new SendMoneyError(409, "INVALID_STATE", "A cancelled transaction cannot be completed.");
         }
+
+        let effectivePaymentRef = paymentRef;
+        if (tx.paymentMethod === "card" && isMitoRetailConfigured()) {
+          const directCkoId = [paymentId || "", sessionId || ""]
+            .map((v) => v.trim())
+            .find((v) => /^(pay_|sid_)/i.test(v));
+          const resolvedPayId =
+            directCkoId || (await resolveCheckoutPaymentIdFromTx(tx)).paymentId;
+          if (resolvedPayId) {
+            effectivePaymentRef = paymentId || resolvedPayId;
+            await syncMitoCardPaymentStatus(resolvedPayId);
+          }
+        }
+
         const now = new Date();
         const updated =
           (await storage.updateSendMoneyTransaction(tx.id, {
             status: "completed",
             paidAt: tx.paidAt ?? now,
             ...(tx.promoCode ? { promoRedeemedAt: tx.promoRedeemedAt ?? now } : {}),
-            ...(paymentRef ? { mitoPaymentReference: paymentRef } : {}),
+            ...(effectivePaymentRef ? { mitoPaymentReference: effectivePaymentRef } : {}),
             mitoPaymentSession: null,
           })) ?? tx;
 
