@@ -343,4 +343,152 @@ describe("Two-Phase Card 3DS & Gateway Confirmation (Option A)", () => {
       restore();
     }
   });
+
+  it("routes instant_bank (PLAID) through InitiateHostedTransaction + RetailCollection Journey and triggers MoveRetailToTransaction on confirm-gateway", async () => {
+    enableMitoRetailAgainstStub();
+    process.env.MITO_RETAIL_SECRET_KEY = "stub_secret_key";
+    __resetMitoRetailCacheForTests();
+
+    ctx.stub.on("/api/v1/mito/Transactions/InitiateHostedTransaction", {
+      status: 200,
+      body: {
+        data: {
+          retailTransactionId: "f3280d60-82c8-4ccf-a1c3-0ab9cdca2a6e",
+          reference: "102635",
+          status: "NEW",
+          requiredAction: {
+            payment: {
+              journeyCode: "JNY-TX-DRAFT",
+              link: "https://mito-checkout-1cca8e18297e.herokuapp.com/retail-transaction?journeyCode=JNY-TX-DRAFT",
+            },
+          },
+        },
+      },
+    });
+    ctx.stub.on("/api/v1/mito/Journey", {
+      status: 200,
+      body: {
+        data: {
+          journeyId: "9c4d52d5-9689-4cdc-92ac-5bb364d21635",
+          journeyCode: "JNY-PLAID-RC01",
+          hostedUrl: "https://mito-checkout-1cca8e18297e.herokuapp.com/retail-payment?journeyCode=JNY-PLAID-RC01",
+          qrCodeUrl: "https://mito-checkout-1cca8e18297e.herokuapp.com/retail-payment/mobile?journeyCode=JNY-PLAID-RC01",
+        },
+      },
+    });
+    ctx.stub.on(/^\/api\/v1\/mito\/Transactions\/by-reference/, {
+      status: 200,
+      body: {
+        data: {
+          reference: "102635",
+          partnerReferenceNumber: "TXN-PLAID-PBB-STUB",
+          status: "READYTOPROCESS",
+          paymentStatus: "PAID",
+        },
+      },
+    });
+    ctx.stub.on("/api/v1/HangFire/MoveRetailToTransaction", {
+      status: 200,
+      body: { responseType: "Success", message: "", data: null },
+    });
+
+    const restore = routeBrowserFetchTo(ctx.base);
+    try {
+      const tx = await ctx.newTx({
+        beneficiaryId: "ben_uba_1",
+        providerId: "prov_uba_1",
+        affiliateRateId: "rate_init_1",
+      });
+
+      const paid = await paySendMoneyTransaction(
+        tx.id,
+        "instant_bank",
+        { code: "SAVE5", discount: 1 },
+        { mode: "pay_less", amount: 10 },
+      );
+
+      expect(paid.status).toBe("awaiting_payment");
+      expect(paid.paidAt).toBeNull();
+      expect(paid.mitoReference).toBe("102635");
+      expect(paid.mitoTransactionId).toBe("102635");
+      expect(paid.mitoPaymentUrl).toBe(
+        "https://mito-checkout-1cca8e18297e.herokuapp.com/retail-payment?journeyCode=JNY-PLAID-RC01",
+      );
+      expect(paid.mitoPaymentReference).toMatch(new RegExp(`^${tx.reference}-PBB-[A-Z0-9]+$`));
+
+      // Must NOT use Transaction/SendMoney (which sets AffiliateId and gets skipped by CheckoutTransactionWebhookSettlementService)
+      expect(ctx.stub.to("/api/v1/Transaction/SendMoney")).toHaveLength(0);
+
+      const initCalls = ctx.stub.to("/api/v1/mito/Transactions/InitiateHostedTransaction");
+      expect(initCalls).toHaveLength(1);
+      expect(initCalls[0].body.PreferredPaymentMethod).toBe("PLAID");
+      expect(String(initCalls[0].body.PartnerReferenceNumber)).toMatch(
+        new RegExp(`^${tx.reference}-PBB-[A-Z0-9]+$`),
+      );
+
+      const journeyCalls = ctx.stub.to("/api/v1/mito/Journey");
+      expect(journeyCalls).toHaveLength(1);
+      expect(journeyCalls[0].body).toMatchObject({
+        journeyType: 4,
+        skipKyc: true,
+        partnerReferenceNumber: initCalls[0].body.PartnerReferenceNumber,
+        reference: "102635",
+        paymentProviders: "PLAID",
+        payingTo: "Rhemito",
+      });
+
+      // Confirming via RetailTransaction reference ("102635") triggers MoveRetailToTransaction and completes the transfer
+      const confirmed = await confirmSendMoneyGateway("102635", {
+        outcome: "completed",
+        rawStatus: "READYTOPROCESS",
+        tnxref: "102635",
+        journeyCode: "JNY-PLAID-RC01",
+      });
+      expect(confirmed.id).toBe(tx.id);
+      expect(confirmed.status).toBe("completed");
+      expect(confirmed.paidAt).toEqual(expect.any(String));
+      expect(ctx.stub.to("/api/v1/HangFire/MoveRetailToTransaction")).toHaveLength(1);
+    } finally {
+      delete process.env.MITO_RETAIL_SECRET_KEY;
+      restore();
+    }
+  });
+
+  it("fails instant_bank with 502 PAYMENT_GATEWAY_ERROR and releases held promo/bonus when PLAID RetailCollection initiation fails", async () => {
+    enableMitoRetailAgainstStub();
+    process.env.MITO_RETAIL_SECRET_KEY = "stub_secret_key";
+    __resetMitoRetailCacheForTests();
+
+    ctx.stub.on("/api/v1/mito/Transactions/InitiateHostedTransaction", {
+      status: 400,
+      body: { message: "Corridor temporarily unavailable for Pay By Bank" },
+    });
+
+    const restore = routeBrowserFetchTo(ctx.base);
+    try {
+      const tx = await ctx.newTx({
+        beneficiaryId: "ben_uba_1",
+        providerId: "prov_uba_1",
+        affiliateRateId: "rate_init_1",
+      });
+
+      await expect(
+        paySendMoneyTransaction(
+          tx.id,
+          "instant_bank",
+          { code: "SAVE5", discount: 1 },
+          { mode: "pay_less", amount: 10 },
+        ),
+      ).rejects.toThrow(/Corridor temporarily unavailable for Pay By Bank/i);
+
+      // Must only call InitiateHostedTransaction once (no un-scoped fallback call)
+      expect(ctx.stub.to("/api/v1/mito/Transactions/InitiateHostedTransaction")).toHaveLength(1);
+      expect(ctx.stub.to("/api/promocodes/release")).toHaveLength(1);
+      expect(ctx.stub.to("/api/wallet/user_123/release")).toHaveLength(1);
+      expect((await ctx.storage.getSendMoneyTransactionById(tx.id))!.status).toBe("awaiting_payment");
+    } finally {
+      delete process.env.MITO_RETAIL_SECRET_KEY;
+      restore();
+    }
+  });
 });
