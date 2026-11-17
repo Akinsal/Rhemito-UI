@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { NotificationContextProvider } from "@/contexts/NotificationContext";
 import { ContactsProvider } from "@/contexts/ContactsContext";
 import Dashboard from "@/pages/Dashboard";
+import CollectionAccount from "@/pages/CollectionAccount";
 import Transactions from "@/pages/Transactions";
 import Invoices from "@/pages/Invoices";
 import RequestPayment from "@/pages/RequestPayment";
@@ -73,6 +74,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
+      <Route path="/overview/collectionaccount" component={CollectionAccount} />
       <Route path="/transactions" component={Transactions} />
       <Route path="/invoices" component={Invoices} />
       <Route path="/request-payment" component={RequestPayment} />

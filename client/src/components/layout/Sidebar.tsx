@@ -92,11 +92,13 @@ export function Sidebar({
     className?: string;
     isCollapsed: boolean;
   }) => {
+    const isOverview = item.href === "/";
     const isReward = item.href === "/bonus-discounts";
     const isNotifications = item.href === "/notifications/archive";
     const isActive =
       location === item.href ||
-      (item.href !== "/" && location.startsWith(item.href)) ||
+      (isOverview && location.startsWith("/overview")) ||
+      (!isOverview && location.startsWith(item.href)) ||
       (isReward && location.startsWith("/rewards"));
 
     const content = (
