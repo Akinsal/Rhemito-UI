@@ -1167,23 +1167,23 @@ export default function Dashboard() {
           onView={viewReferOffer}
         />
 
-        {/* Account Summary Section — 3 Clean White Cards matching Figma 12498:26082 */}
+        {/* Account Summary Section — 3 Pastel Cards matching Rhemito Reference Palette */}
         <motion.div variants={itemVariants} data-testid="section-account-summary">
           <h2 className="text-base font-semibold text-[#323130] tracking-tight mb-3">
             Account Summary
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Total Sent Card */}
-            <div className="rounded-lg bg-white p-4 flex flex-col justify-between min-h-[82px]">
-              <span className="text-xs font-normal text-[#323130]">
+            <div className="rounded-xl bg-[#FFEDE7] px-5 py-4 flex flex-col justify-between min-h-[82px]">
+              <span className="text-xs font-normal text-[#605E5C]">
                 Total sent
               </span>
               <div className="flex items-center justify-between gap-2 mt-2">
-                <span data-testid="summary-total-sent" className="text-xl font-semibold text-[#323130] tracking-tight whitespace-nowrap tabular-nums">
+                <span data-testid="summary-total-sent" className="text-xl font-bold text-[#605E5C] tracking-tight whitespace-nowrap tabular-nums">
                   {totalSentFormatted}
                 </span>
                 <Select defaultValue="GBP">
-                  <SelectTrigger className="h-7 w-[76px] rounded-full text-xs bg-white border border-[#d2d0ce] shadow-none font-semibold text-[#323130] px-2.5">
+                  <SelectTrigger className="h-7 w-[76px] rounded-full text-xs bg-white border border-[#d2d0ce] shadow-none font-medium text-[#323130] px-2.5">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1194,16 +1194,16 @@ export default function Dashboard() {
             </div>
 
             {/* Wallet Balance Card */}
-            <div className="rounded-lg bg-white p-4 flex flex-col justify-between min-h-[82px]">
-              <span className="text-xs font-normal text-[#323130]">
+            <div className="rounded-xl bg-[#E5F1FE] px-5 py-4 flex flex-col justify-between min-h-[82px]">
+              <span className="text-xs font-normal text-[#605E5C]">
                 Wallet Balance
               </span>
               <div className="flex items-center justify-between gap-2 mt-2">
-                <span data-testid="summary-wallet-balance" className="text-xl font-semibold text-[#323130] tracking-tight whitespace-nowrap tabular-nums">
+                <span data-testid="summary-wallet-balance" className="text-xl font-bold text-[#605E5C] tracking-tight whitespace-nowrap tabular-nums">
                   {walletBalanceFormatted}
                 </span>
                 <Select defaultValue="GBP">
-                  <SelectTrigger className="h-7 w-[76px] rounded-full text-xs bg-white border border-[#d2d0ce] shadow-none font-semibold text-[#323130] px-2.5">
+                  <SelectTrigger className="h-7 w-[76px] rounded-full text-xs bg-white border border-[#d2d0ce] shadow-none font-medium text-[#323130] px-2.5">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1214,16 +1214,16 @@ export default function Dashboard() {
             </div>
 
             {/* Collection Account Card */}
-            <div className="rounded-lg bg-white p-4 flex flex-col justify-between min-h-[82px]">
-              <span className="text-xs font-normal text-[#323130]">
+            <div className="rounded-xl bg-[#E0EED6] px-5 py-4 flex flex-col justify-between min-h-[82px]">
+              <span className="text-xs font-normal text-[#605E5C]">
                 Collection Account
               </span>
               <div className="flex items-center justify-between gap-2 mt-2">
-                <span data-testid="summary-collection-account" className="text-xl font-semibold text-[#323130] tracking-tight whitespace-nowrap tabular-nums">
+                <span data-testid="summary-collection-account" className="text-xl font-bold text-[#605E5C] tracking-tight whitespace-nowrap tabular-nums">
                   {collectionBalanceFormatted}
                 </span>
                 <Select defaultValue="GBP">
-                  <SelectTrigger className="h-7 w-[76px] rounded-full text-xs bg-white border border-[#d2d0ce] shadow-none font-semibold text-[#323130] px-2.5">
+                  <SelectTrigger className="h-7 w-[76px] rounded-full text-xs bg-white border border-[#d2d0ce] shadow-none font-medium text-[#323130] px-2.5">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
