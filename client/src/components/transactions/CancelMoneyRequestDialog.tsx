@@ -31,7 +31,7 @@ export function CancelMoneyRequestDialog({ request, open, onOpenChange, onConfir
           <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-2">
             <AlertCircle className="w-6 h-6" />
           </div>
-          <DialogTitle className="font-display text-lg">Cancel Money Request?</DialogTitle>
+          <DialogTitle className="font-display text-lg">Cancel money request?</DialogTitle>
           <DialogDescription>
             Are you sure you want to cancel this money request? The sender will no longer be able to make a payment using this request link.
           </DialogDescription>

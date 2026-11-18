@@ -117,10 +117,10 @@ export default function TestCheckout() {
                     <CardHeader>
                         <CardTitle className="text-xl text-primary font-bold">
                             {step === 1 && "Start your transfer"}
-                            {step === 2 && "Select Recipient"}
-                            {step === 3 && "Banking Details"}
-                            {step === 4 && "Review Transaction"}
-                            {step === 5 && "Payment Method"}
+                            {step === 2 && "Select recipient"}
+                            {step === 3 && "Banking details"}
+                            {step === 4 && "Review transaction"}
+                            {step === 5 && "Payment method"}
                         </CardTitle>
                         <CardDescription>Step {step} of 5</CardDescription>
                     </CardHeader>
@@ -187,7 +187,7 @@ export default function TestCheckout() {
                             <div className="space-y-6">
                                 {/* PROMO CODE at TOP */}
                                 <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-xl space-y-3">
-                                    <h4 className="flex items-center gap-2 text-blue-700 font-semibold"><AlertCircle size={18} /> Have a Promo Code?</h4>
+                                    <h4 className="flex items-center gap-2 text-blue-700 font-semibold"><AlertCircle size={18} /> Have a promo code?</h4>
                                     <div className="flex gap-2">
                                         <Input
                                             className="bg-white"
@@ -247,7 +247,7 @@ export default function TestCheckout() {
             <div className="hidden lg:block w-80">
                 <Card className="sticky top-4 bg-gray-50/80 backdrop-blur">
                     <CardHeader>
-                        <CardTitle className="text-lg">Transaction Summary</CardTitle>
+                        <CardTitle className="text-lg">Transaction summary</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3 text-sm">
                         <div className="flex justify-between"><span>You Send</span><span>{transaction.amount.toFixed(2)} GBP</span></div>

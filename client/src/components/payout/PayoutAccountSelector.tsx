@@ -270,7 +270,7 @@ export function PayoutAccountSelector({
             </div>
             <div className="space-y-1">
               <h4 className="font-bold text-sm text-amber-950 flex items-center gap-2">
-                <span>Settlement Bank Account Required</span>
+                <span>Settlement bank account required</span>
                 <Badge variant="outline" className="text-[10px] border-amber-300 bg-amber-100/60 text-amber-800 font-semibold">
                   Mandatory
                 </Badge>
@@ -380,7 +380,7 @@ export function PayoutAccountSelector({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-lg">
               <Building2 className="w-5 h-5 text-primary" />
-              <span>Add Settlement Bank Account</span>
+              <span>Add settlement bank account</span>
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
               Add a bank account to receive settlements directly from your {context === "invoice" ? "invoices" : context === "campaign" || context === "group_pay" ? "funding campaigns" : "money requests"}.

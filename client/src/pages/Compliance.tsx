@@ -278,7 +278,7 @@ export function CompliancePage() {
                 <ShieldCheck className="w-3.5 h-3.5" />
                 Verified ({journey?.kycType || "AMLADDR"})
               </div>
-              <h2 className="text-xl font-bold text-slate-900">Verification Complete</h2>
+              <h2 className="text-xl font-bold text-slate-900">Verification complete</h2>
               <p className="text-sm text-slate-600 max-w-md">
                 Your personal details and address verification have been approved. No further compliance action is required — you can now send money securely.
               </p>
@@ -306,7 +306,7 @@ export function CompliancePage() {
               <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
                 Under Review
               </span>
-              <h2 className="text-xl font-bold text-slate-900">Your KYC is Under Review</h2>
+              <h2 className="text-xl font-bold text-slate-900">Your KYC is under review</h2>
               <p className="text-sm text-slate-600 max-w-md">
                 Your KYC is under review, but you can still proceed with your transaction. The transaction will then be verified by the admin for further processing.
               </p>
@@ -327,7 +327,7 @@ export function CompliancePage() {
               <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center text-red-600">
                 <AlertTriangle className="w-10 h-10" />
               </div>
-              <h2 className="text-xl font-bold text-slate-900">Verification Requires Assistance</h2>
+              <h2 className="text-xl font-bold text-slate-900">Verification requires assistance</h2>
               <p className="text-sm text-slate-600 max-w-md">
                 {completedStatus === "FAILED"
                   ? "KYC verification failed! Please contact the administrator for further assistance with your KYC verification."
@@ -382,7 +382,7 @@ export function CompliancePage() {
               <div className="w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600">
                 <CheckCircle2 className="w-10 h-10" />
               </div>
-              <h2 className="text-xl font-bold text-slate-900">Compliance Up to Date</h2>
+              <h2 className="text-xl font-bold text-slate-900">Compliance up to date</h2>
               <p className="text-sm text-slate-600 max-w-md">
                 {journey?.message || "No additional KYC verification is currently required for your account."}
               </p>
@@ -598,7 +598,7 @@ export function KycVerificationPage() {
           <Card className="border-slate-200 bg-white shadow-xs">
             <CardContent className="p-8 space-y-4">
               <h1 className="text-2xl font-bold text-slate-900">Verification</h1>
-              <h3 className="text-lg font-semibold text-slate-800">KYC Verification Status</h3>
+              <h3 className="text-lg font-semibold text-slate-800">KYC verification status</h3>
               <p className="text-sm text-slate-600">
                 Please contact the administrator for further assistance with your KYC verification.
               </p>

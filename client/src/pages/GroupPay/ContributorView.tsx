@@ -585,7 +585,7 @@ export default function ContributorView() {
                                             <Loader2 className="w-14 h-14 text-blue-600 animate-spin absolute top-0 left-0" />
                                         </div>
                                         <div className="text-center">
-                                            <h3 className="text-lg font-bold text-slate-900 tracking-tight">Securing Connection</h3>
+                                            <h3 className="text-lg font-bold text-slate-900 tracking-tight">Securing connection</h3>
                                             <p className="text-slate-500 text-sm font-medium">Entering Campaign Workspace...</p>
                                         </div>
                                     </motion.div>
@@ -603,7 +603,7 @@ export default function ContributorView() {
                                         </div>
                                         <div className="space-y-2">
                                             <h2 className="text-xl font-bold text-slate-900 tracking-tight">
-                                                {campaign.status === "paused" ? "Contributions Paused" : "Campaign Unavailable"}
+                                                {campaign.status === "paused" ? "Contributions paused" : "Campaign unavailable"}
                                             </h2>
                                             <p className="text-sm text-slate-500 leading-6 max-w-xs mx-auto">
                                                 {campaign.status === "paused"
@@ -623,7 +623,7 @@ export default function ContributorView() {
                                                 className="space-y-4"
                                             >
                                                 <div className="space-y-2">
-                                                    <h2 className="text-2xl font-bold text-slate-900">Make a Contribution</h2>
+                                                    <h2 className="text-2xl font-bold text-slate-900">Make a contribution</h2>
                                                     <p className="text-slate-500">Enter your email and the amount you'd like to contribute.</p>
                                                 </div>
 
@@ -1008,9 +1008,9 @@ export default function ContributorView() {
                                                 <div className="space-y-2">
                                                     <h2 className="text-2xl font-bold text-slate-900">
                                                         {paymentStep === "method" && "How would you like to pay?"}
-                                                        {paymentStep === "card_details" && "Enter Card Details"}
-                                                        {paymentStep === "processing_instant" && "Connecting to Bank"}
-                                                        {paymentStep === "manual_transfer" && "Bank Transfer Details"}
+                                                        {paymentStep === "card_details" && "Enter card details"}
+                                                        {paymentStep === "processing_instant" && "Connecting to bank"}
+                                                        {paymentStep === "manual_transfer" && "Bank transfer details"}
                                                     </h2>
                                                     <p className="text-slate-500">
                                                         {paymentStep === "method" && "Choose a secure payment method for your contribution."}
@@ -1124,7 +1124,7 @@ export default function ContributorView() {
                                                                 <CheckCircle2 className="w-8 h-8 text-blue-600" />
                                                             </div>
                                                             <div className="space-y-2 px-6">
-                                                                <h3 className="text-xl font-bold text-slate-900">Transfer Initiated</h3>
+                                                                <h3 className="text-xl font-bold text-slate-900">Transfer initiated</h3>
                                                                 <p className="text-slate-500 text-sm">
                                                                     Thank you. We will verify your transfer shortly and notify you via email once completed.
                                                                 </p>
@@ -1169,7 +1169,7 @@ export default function ContributorView() {
                                                             <CheckCircle2 className="w-10 h-10 text-green-600" />
                                                         </div>
                                                         <div className="space-y-1">
-                                                            <h2 className="text-3xl font-bold text-slate-900">Payment Received</h2>
+                                                            <h2 className="text-3xl font-bold text-slate-900">Payment received</h2>
                                                             <p className="text-slate-500">Thanks for funding this collection</p>
                                                         </div>
                                                     </div>
@@ -1203,7 +1203,7 @@ export default function ContributorView() {
                                                     </div>
                                                     <div className="group relative bg-gradient-to-br from-indigo-600 to-blue-700 p-5 rounded-3xl text-white shadow-xl shadow-indigo-900/20">
                                                         <Gift className="w-8 h-8 opacity-20 absolute top-4 right-4" />
-                                                        <h3 className="font-bold text-xl mb-2">Claim Your Bonus</h3>
+                                                        <h3 className="font-bold text-xl mb-2">Claim your bonus</h3>
                                                         <p className="text-indigo-100 text-sm mb-4">Open a Mito account today and get <span className="text-white font-bold">100% off fees</span> on your next transfer.</p>
                                                         <Button className="bg-white text-indigo-700 hover:bg-indigo-50 font-bold rounded-xl h-10 w-full shadow-lg">Open Free Account</Button>
                                                     </div>

@@ -173,7 +173,7 @@ export default function SentInvoiceDetails() {
             <CardHeader>
               <CardTitle className="font-display text-lg flex items-center gap-2">
                 <FileText className="w-5 h-5 text-primary" />
-                Generated Invoice
+                Generated invoice
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -264,7 +264,7 @@ export default function SentInvoiceDetails() {
             <CardHeader>
               <CardTitle className="font-display text-lg flex items-center gap-2">
                 <CalendarDays className="w-5 h-5 text-primary" />
-                Dates & Payment
+                Dates & payment
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -297,7 +297,7 @@ export default function SentInvoiceDetails() {
             <CardHeader>
               <CardTitle className="font-display text-lg flex items-center gap-2">
                 <Clock className="w-5 h-5 text-primary" />
-                Cancellation & Link Requests
+                Cancellation & link requests
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -333,7 +333,7 @@ export default function SentInvoiceDetails() {
         {/* Important events timeline */}
         <Card className="mt-6">
           <CardHeader>
-            <CardTitle className="font-display text-lg">Important Invoice Events</CardTitle>
+            <CardTitle className="font-display text-lg">Important invoice events</CardTitle>
           </CardHeader>
           <CardContent>
             {invoice.events.length === 0 ? (
@@ -361,7 +361,7 @@ export default function SentInvoiceDetails() {
         {/* Client email delivery */}
         <Card className="mt-6 mb-4">
           <CardHeader>
-            <CardTitle className="font-display text-lg">Client Notifications</CardTitle>
+            <CardTitle className="font-display text-lg">Client notifications</CardTitle>
           </CardHeader>
           <CardContent>
             {invoice.emails.length === 0 ? (

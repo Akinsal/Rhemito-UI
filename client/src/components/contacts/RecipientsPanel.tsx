@@ -670,7 +670,7 @@ export function RecipientsPanel() {
       <button
         type="button"
         onClick={() => toggleSort(field)}
-        className="inline-flex items-center gap-1.5 uppercase tracking-wider hover:text-foreground transition-colors"
+        className="inline-flex items-center gap-1.5 tracking-wider hover:text-foreground transition-colors"
         data-testid={testId}
       >
         {label}
@@ -865,21 +865,21 @@ export function RecipientsPanel() {
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
-                      <SortableHeader field="name" label="Full Name" testId="button-sort-name" />
+                      <SortableHeader field="name" label="Full name" testId="button-sort-name" />
                       <SortableHeader field="country" label="Country" testId="button-sort-country" />
                       <SortableHeader
                         field="serviceType"
-                        label="Service Type"
+                        label="Service type"
                         className="hidden sm:table-cell"
                         testId="button-sort-service-type"
                       />
-                      <TableHead className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider hidden lg:table-cell">
-                        Unique Code
+                      <TableHead className="text-left text-xs font-semibold text-muted-foreground tracking-wider hidden lg:table-cell">
+                        Unique code
                       </TableHead>
-                      <TableHead className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider hidden md:table-cell">
-                        Account Number
+                      <TableHead className="text-left text-xs font-semibold text-muted-foreground tracking-wider hidden md:table-cell">
+                        Account number
                       </TableHead>
-                      <TableHead className="text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      <TableHead className="text-right text-xs font-semibold text-muted-foreground tracking-wider">
                         Actions
                       </TableHead>
                     </TableRow>
@@ -1150,7 +1150,7 @@ export function RecipientsPanel() {
                 <CardContent className="p-4 sm:p-6 max-h-[85vh] overflow-y-auto">
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-xl font-semibold font-display">
-                      {editingRecipient ? "Edit Recipient" : "Add New Recipient"}
+                      {editingRecipient ? "Edit recipient" : "Add new recipient"}
                     </h2>
                     <button
                       type="button"
@@ -1519,7 +1519,7 @@ export function RecipientsPanel() {
               <Card>
                 <CardContent className="p-6 max-h-[85vh] overflow-y-auto">
                   <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-semibold font-display">Recipient Details</h2>
+                    <h2 className="text-xl font-semibold font-display">Recipient details</h2>
                     <button
                       type="button"
                       onClick={() => setViewingRecipient(null)}
@@ -1705,7 +1705,7 @@ export function RecipientsPanel() {
                   <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <Trash2 className="w-6 h-6 text-red-600" aria-hidden="true" />
                   </div>
-                  <h3 className="text-lg font-semibold mb-2">Delete Recipient?</h3>
+                  <h3 className="text-lg font-semibold mb-2">Delete recipient?</h3>
                   <p className="text-muted-foreground text-sm mb-6">
                     Are you sure you want to delete{" "}
                     <span className="font-medium text-foreground">

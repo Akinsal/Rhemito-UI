@@ -81,7 +81,7 @@ export function CancelInvoiceDialog({ invoice, open, onOpenChange }: CancelInvoi
     <Dialog open={open} onOpenChange={(next) => { if (!isCancelling) onOpenChange(next); }}>
       <DialogContent className="sm:max-w-md" data-testid="dialog-cancel-invoice">
         <DialogHeader>
-          <DialogTitle>Cancel Invoice</DialogTitle>
+          <DialogTitle>Cancel invoice</DialogTitle>
           <DialogDescription>
             This action is permanent. The invoice payment link will stop working immediately.
           </DialogDescription>

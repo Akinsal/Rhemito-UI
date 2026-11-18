@@ -1237,7 +1237,7 @@ export default function Dashboard() {
               variants={itemVariants}
               className="shrink-0 text-2xl font-normal tracking-tight text-[#323130] md:text-[28px]"
             >
-              <span data-testid="dashboard-welcome">Welcome{welcomeName(user) ? ` ${welcomeName(user)}` : ""}</span>
+              <span data-testid="dashboard-welcome">Welcome{welcomeName(user) ? <> <span className="font-bold">{welcomeName(user)}</span></> : ""}</span>
             </motion.h1>
 
             {false && bonusBalance.available > 0 && (
@@ -1269,7 +1269,7 @@ export default function Dashboard() {
         {/* Account Summary Section — 3 Pastel Cards matching Rhemito Reference Palette */}
         <motion.div variants={itemVariants} data-testid="section-account-summary">
           <h2 className="text-xl font-bold text-[#323130] tracking-tight mb-3">
-            Account Summary
+            Account summary
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Total Sent Card */}
@@ -1307,7 +1307,7 @@ export default function Dashboard() {
               className="rounded-xl bg-[#E5F1FE] px-5 py-4 flex flex-col justify-between min-h-[82px] cursor-pointer transition-shadow hover:shadow-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2e5bff]"
             >
               <span className="text-xs font-normal text-[#605E5C]">
-                Wallet Balance
+                Wallet balance
               </span>
               <div className="flex items-center justify-between gap-2 mt-2">
                 <span data-testid="summary-wallet-balance" className="text-xl font-bold text-[#605E5C] tracking-tight whitespace-nowrap tabular-nums">
@@ -1344,7 +1344,7 @@ export default function Dashboard() {
               className="rounded-xl bg-[#E0EED6] px-5 py-4 flex flex-col justify-between min-h-[82px] cursor-pointer transition-shadow hover:shadow-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2e5bff]"
             >
               <span className="text-xs font-normal text-[#605E5C]">
-                Payment Account
+                Payment account
               </span>
               <div className="flex items-center justify-between gap-2 mt-2">
                 <span data-testid="summary-collection-account" className="text-xl font-bold text-[#605E5C] tracking-tight whitespace-nowrap tabular-nums">
@@ -1787,7 +1787,7 @@ export default function Dashboard() {
                 <div className="flex items-center justify-between gap-3 px-5 md:px-6 pt-5 pb-3">
                   <div className="flex items-center gap-2.5">
                     <h2 className="font-display font-bold text-base md:text-lg text-[#605e5c] tracking-tight">
-                      Recent Transactions
+                      Recent transactions
                     </h2>
                   </div>
                   <div className="flex items-center gap-3">
@@ -1796,7 +1796,7 @@ export default function Dashboard() {
                       onClick={() => setLocation("/transactions")}
                       className="text-xs font-bold text-slate-500 hover:text-blue-600 shrink-0 transition-colors cursor-pointer"
                     >
-                      See All
+                      See all
                     </button>
                   </div>
                 </div>
@@ -1901,7 +1901,7 @@ export default function Dashboard() {
                       <TableHeader>
                         <TableRow className="hover:bg-transparent border-b border-slate-100">
                           <TableHead className="text-xs font-bold text-[#323130] whitespace-nowrap py-3.5 pl-4 sm:pl-6">
-                            Order No
+                            Order no
                           </TableHead>
                           <TableHead className="text-xs font-bold text-[#323130] hidden sm:table-cell py-3.5">
                             Date

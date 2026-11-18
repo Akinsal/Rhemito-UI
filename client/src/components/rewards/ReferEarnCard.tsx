@@ -262,7 +262,7 @@ export function ReferEarnCard({
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex flex-col items-start">
                       <h2 className="font-display text-3xl sm:text-[42px] font-bold text-[#323130] leading-[1.12] tracking-tight">
-                        Invite and Get
+                        Invite and get
                       </h2>
                       <p className="font-display text-3xl sm:text-[42px] font-bold text-[#323130] leading-[1.12] tracking-tight">
                         {formatMoney(activeOffer.referrer_reward, activeOffer.currency)}

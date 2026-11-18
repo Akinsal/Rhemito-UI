@@ -205,10 +205,10 @@ export default function LandingPage() {
                         {/* Right - Features grid */}
                         <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-5">
                             {[
-                                { icon: '🛡️', title: 'Used & Trusted', desc: 'Join thousands who love and use Rhemito.', color: '#4F46E5' },
-                                { icon: '🌍', title: '156 Countries & More', desc: 'Use Rhemito daily to send money back home to your loved ones.', color: '#7C3AED' },
-                                { icon: '✨', title: 'Simple To Use', desc: 'Sending money is just as simple as sending a chat message.', color: '#06B6D4' },
-                                { icon: '🤝', title: 'Amazing Partners', desc: 'We work with the best partners in the industry.', color: '#10B981' },
+                                { icon: '🛡️', title: 'Used & trusted', desc: 'Join thousands who love and use Rhemito.', color: '#4F46E5' },
+                                { icon: '🌍', title: '156 countries & more', desc: 'Use Rhemito daily to send money back home to your loved ones.', color: '#7C3AED' },
+                                { icon: '✨', title: 'Simple to use', desc: 'Sending money is just as simple as sending a chat message.', color: '#06B6D4' },
+                                { icon: '🤝', title: 'Amazing partners', desc: 'We work with the best partners in the industry.', color: '#10B981' },
                             ].map((feature, i) => (
                                 <div key={i} className="p-6 rounded-2xl transition-all duration-300 hover:scale-105 hover:shadow-lg cursor-default group"
                                     style={{ background: 'white', border: '1px solid rgba(0,0,0,0.05)', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
@@ -341,7 +341,7 @@ export default function LandingPage() {
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11M8 14v3M12 14v3M16 14v3" />
                                     </svg>
                                 ),
-                                title: 'Bank Deposit',
+                                title: 'Bank deposit',
                                 desc: 'Send money straight to bank accounts worldwide instantly.',
                                 gradient: 'linear-gradient(135deg, #06B6D4, #0891B2)',
                                 bgLight: '#ecfeff',
@@ -352,7 +352,7 @@ export default function LandingPage() {
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
                                     </svg>
                                 ),
-                                title: 'Mobile Topup',
+                                title: 'Mobile topup',
                                 desc: 'Top up all network providers directly from Rhemito.',
                                 gradient: 'linear-gradient(135deg, #4F46E5, #7C3AED)',
                                 bgLight: '#eef2ff',
@@ -363,7 +363,7 @@ export default function LandingPage() {
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                                     </svg>
                                 ),
-                                title: 'Mobile Money Wallet',
+                                title: 'Mobile money wallet',
                                 desc: 'Transfers made instantly to Mobile Money accounts.',
                                 gradient: 'linear-gradient(135deg, #E11D48, #F43F5E)',
                                 bgLight: '#fff1f2',

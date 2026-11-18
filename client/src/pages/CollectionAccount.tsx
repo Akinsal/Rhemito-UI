@@ -131,7 +131,7 @@ export default function CollectionAccount() {
           className="text-xl md:text-[22px] font-normal text-[#323130] tracking-tight"
           data-testid="heading-collection-account"
         >
-          Collection Account
+          Collection account
         </h1>
 
         <button
@@ -241,13 +241,13 @@ export default function CollectionAccount() {
                     className="text-sm sm:text-[15px] font-semibold text-[#1b1a19] mb-4"
                     data-testid="collection-details-heading"
                   >
-                    Below Are The Details Of Your {selectedCollection.name} Payments Account
+                    Below are the details of your {selectedCollection.name} payments account
                   </h2>
 
                   <div className="rounded-xl bg-white p-5 sm:p-6 shadow-2xs">
                     <div className="flex items-center justify-between gap-3">
                       <h3 className="text-[13px] sm:text-sm font-semibold text-[#1b1a19]">
-                        Regular Payments
+                        Regular payments
                       </h3>
                       <button
                         type="button"
@@ -262,7 +262,7 @@ export default function CollectionAccount() {
 
                     <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 text-xs sm:text-[13px]">
                       <div>
-                        <div className="font-semibold text-[#1b1a19]">Bank Country</div>
+                        <div className="font-semibold text-[#1b1a19]">Bank country</div>
                         <div className="mt-0.5 text-[#323130]">
                           {selectedCollection.bankCountry}
                         </div>
@@ -270,27 +270,27 @@ export default function CollectionAccount() {
 
                       <div>
                         <div className="font-semibold text-[#1b1a19]">
-                          Account Holder&apos;s Name
+                          Account holder&apos;s name
                         </div>
                         <div className="mt-0.5 text-[#323130]">{accountHolderName}</div>
                       </div>
 
                       <div>
-                        <div className="font-semibold text-[#1b1a19]">Bank Name</div>
+                        <div className="font-semibold text-[#1b1a19]">Bank name</div>
                         <div className="mt-0.5 text-[#323130]">
                           {selectedCollection.bankName}
                         </div>
                       </div>
 
                       <div>
-                        <div className="font-semibold text-[#1b1a19]">Account Number</div>
+                        <div className="font-semibold text-[#1b1a19]">Account number</div>
                         <div className="mt-0.5 text-[#323130] tabular-nums">
                           {selectedCollection.accountNumber}
                         </div>
                       </div>
 
                       <div>
-                        <div className="font-semibold text-[#1b1a19]">Bank Address</div>
+                        <div className="font-semibold text-[#1b1a19]">Bank address</div>
                         <div className="mt-0.5 text-[#323130]">
                           {selectedCollection.bankAddress}
                         </div>
@@ -298,7 +298,8 @@ export default function CollectionAccount() {
 
                       <div>
                         <div className="font-semibold text-[#1b1a19]">
-                          {selectedCollection.routingLabel}
+                          {selectedCollection.routingLabel.charAt(0) +
+                            selectedCollection.routingLabel.slice(1).toLowerCase()}
                         </div>
                         <div className="mt-0.5 text-[#323130] tabular-nums">
                           {selectedCollection.routingValue}
@@ -378,12 +379,12 @@ export default function CollectionAccount() {
                     className="text-sm sm:text-[15px] font-semibold text-[#1b1a19]"
                     data-testid="wallet-details-heading"
                   >
-                    Below Are The Details Of Your {selectedWallet.code} Wallet
+                    Below are the details of your {selectedWallet.code} wallet
                   </h2>
 
                   <div className="mt-6 space-y-4 text-xs sm:text-[13px]">
                     <div className="space-y-0.5">
-                      <div className="font-semibold text-[#1b1a19]">Wallet Balance</div>
+                      <div className="font-semibold text-[#1b1a19]">Wallet balance</div>
                       <div
                         className="text-[#323130] tabular-nums"
                         data-testid="wallet-detail-balance"
@@ -393,7 +394,7 @@ export default function CollectionAccount() {
                     </div>
 
                     <div className="space-y-0.5">
-                      <div className="font-semibold text-[#1b1a19]">Amount Sent</div>
+                      <div className="font-semibold text-[#1b1a19]">Amount sent</div>
                       <div
                         className="text-[#323130] tabular-nums"
                         data-testid="wallet-detail-amount-sent"
@@ -404,7 +405,7 @@ export default function CollectionAccount() {
 
                     <div className="space-y-0.5">
                       <div className="font-semibold text-[#1b1a19]">
-                        Number Of Transactions
+                        Number of transactions
                       </div>
                       <div
                         className="text-[#323130] tabular-nums"

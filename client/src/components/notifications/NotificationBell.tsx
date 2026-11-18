@@ -48,7 +48,7 @@ function BellIcon({
 }): React.JSX.Element {
   return (
     <>
-      <Bell className="w-4 h-4 md:w-5 md:h-5" />
+      <Bell fill="none" className="w-4 h-4 md:w-5 md:h-5 text-[#2e5bff]" />
       <AnimatePresence>
         {unreadCount > 0 && <NotificationBadge count={unreadCount} />}
       </AnimatePresence>

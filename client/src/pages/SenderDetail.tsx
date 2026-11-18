@@ -109,7 +109,7 @@ export default function SenderDetail() {
 
             <div className="grid grid-cols-3 gap-8">
               <div>
-                <h3 className="text-sm font-semibold text-muted-foreground mb-4">Personal Details</h3>
+                <h3 className="text-sm font-semibold text-muted-foreground mb-4">Personal details</h3>
                 <div className="space-y-4">
                   <div>
                     <p className="text-xs text-muted-foreground">Country</p>
@@ -137,7 +137,7 @@ export default function SenderDetail() {
               </div>
 
               <div>
-                <h3 className="text-sm font-semibold text-muted-foreground mb-4">Payment Details</h3>
+                <h3 className="text-sm font-semibold text-muted-foreground mb-4">Payment details</h3>
                 <div className="space-y-4">
                   <div>
                     <p className="text-xs text-muted-foreground">Currency</p>
@@ -163,7 +163,7 @@ export default function SenderDetail() {
 
             {/* Banking Details section */}
             <div className="mt-8 pt-6 border-t border-border">
-              <h3 className="text-sm font-semibold text-muted-foreground mb-4">Banking Details</h3>
+              <h3 className="text-sm font-semibold text-muted-foreground mb-4">Banking details</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-4">
                 {sender.bankName && (
                   <div>
@@ -234,7 +234,7 @@ export default function SenderDetail() {
                   <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <Trash2 className="w-6 h-6 text-red-600" />
                   </div>
-                  <h3 className="text-lg font-semibold mb-2">Delete Sender?</h3>
+                  <h3 className="text-lg font-semibold mb-2">Delete sender?</h3>
                   <p className="text-muted-foreground text-sm mb-6">
                     Are you sure you want to delete this sender? This action cannot be undone.
                   </p>

@@ -540,7 +540,7 @@ export default function SendInvoice() {
               </motion.div>
 
               <div className="space-y-2">
-                <h2 className="text-2xl font-bold font-display">Invoice Sent!</h2>
+                <h2 className="text-2xl font-bold font-display">Invoice sent!</h2>
                 <p className="text-sm text-muted-foreground">
                   Invoice <span className="font-semibold text-foreground">{createdInvoice.invoiceNumber}</span> and its
                   payment link have been emailed to{" "}
@@ -731,14 +731,14 @@ export default function SendInvoice() {
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back
             </Button>
-            <h1 className="text-2xl font-bold font-display">Review and Confirm</h1>
+            <h1 className="text-2xl font-bold font-display">Review and confirm</h1>
             <p className="text-muted-foreground mt-1">Check every detail before the invoice is generated</p>
           </motion.div>
 
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
             <Card>
               <CardHeader>
-                <CardTitle className="font-display">Invoice Summary</CardTitle>
+                <CardTitle className="font-display">Invoice summary</CardTitle>
                 <CardDescription>The invoice has not been created yet — nothing is saved until you confirm</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -857,7 +857,7 @@ export default function SendInvoice() {
             Back
           </Button>
 
-          <h1 className="text-2xl font-bold font-display">Send Invoice</h1>
+          <h1 className="text-2xl font-bold font-display">Send invoice</h1>
           <p className="text-muted-foreground mt-1">
             {isGenerateMode
               ? "Create a professional invoice on the go and send it to your client"
@@ -958,7 +958,7 @@ export default function SendInvoice() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="font-display">Invoice Details</CardTitle>
+            <CardTitle className="font-display">Invoice details</CardTitle>
             <CardDescription>
               {isGenerateMode
                 ? "Build your invoice items and enter payment details"
@@ -1441,7 +1441,7 @@ export default function SendInvoice() {
 
               <div className="lg:col-span-2 lg:self-start lg:sticky lg:top-24">
                 <div className="border-2 border-primary/20 rounded-xl p-5 space-y-4 bg-white shadow-sm" data-testid="fee-breakdown">
-                  <h3 className="font-semibold text-lg text-slate-900">Amount Summary</h3>
+                  <h3 className="font-semibold text-lg text-slate-900">Amount summary</h3>
 
                   <div className="space-y-3">
                     {isGenerateMode && (

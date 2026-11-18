@@ -1038,7 +1038,7 @@ describe("Refer & Earn card", () => {
 describe("Who is signed in", () => {
   rule("REF-17", "The header initials and Dashboard welcome come from the signed-in user (first name, or business name, or email), never from a fixed name", {
     why: "A hard-coded name once showed another customer's name on every account. The greeting and avatar must always describe the person logged in.",
-    fix: "lib/userDisplay.ts welcomeName(user) and userInitials(user); Dashboard.tsx renders `Welcome ${welcomeName(user)}` with user from useAuth(); layout/Header.tsx renders userInitials(user).",
+    fix: "lib/userDisplay.ts welcomeName(user) and userInitials(user); Dashboard.tsx renders non-bold 'Welcome' with <span className=\"font-bold\">{welcomeName(user)}</span> from useAuth() (PD-03); layout/Header.tsx renders userInitials(user).",
     where: ["client/src/lib/userDisplay.ts", "client/src/pages/Dashboard.tsx", "client/src/components/layout/Header.tsx"],
   }, () => {
     expect(welcomeName({ accountType: "individual", firstName: "Mohammad", lastName: "Khan", email: "m@x.com" } as any)).toBe("Mohammad");
@@ -1050,7 +1050,7 @@ describe("Who is signed in", () => {
 
     const dash = source("client/src/pages/Dashboard.tsx");
     expect(dash).toMatch(/const \{ user \} = useAuth\(\)/);
-    expect(dash).toMatch(/data-testid="dashboard-welcome">Welcome\{welcomeName\(user\) \? ` \$\{welcomeName\(user\)\}` : ""\}/);
+    expect(dash).toMatch(/data-testid="dashboard-welcome">Welcome\{welcomeName\(user\) \? <> <span className="font-bold">\{welcomeName\(user\)\}<\/span><\/> : ""\}/);
     expect(source("client/src/components/layout/Header.tsx")).toMatch(/\{userInitials\(user\)\}/);
   });
 

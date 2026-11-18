@@ -154,7 +154,7 @@ export default function Login() {
                             <form onSubmit={handlePinSubmit}>
                                 {isBlocked ? (
                                     <div className="mb-5 p-4 bg-red-50 border border-red-200 rounded-md">
-                                        <h3 className="text-red-800 font-medium mb-1">Account Blocked</h3>
+                                        <h3 className="text-red-800 font-medium mb-1">Account blocked</h3>
                                         <p className="text-sm text-red-600">
                                             You have exceeded the maximum number of verification attempts. Your account has been blocked for security. Please contact your administrator at <a href="mailto:admin@rhemito.com" className="font-semibold hover:underline">admin@rhemito.com</a> to resolve this.
                                         </p>
@@ -213,7 +213,7 @@ export default function Login() {
 
                 {step === "password" && (
                     <div className="w-full max-w-lg flex flex-col items-center">
-                        <h1 className="text-xl font-normal text-slate-600 mb-2">Create a Password</h1>
+                        <h1 className="text-xl font-normal text-slate-600 mb-2">Create a password</h1>
                         <p className="text-sm text-slate-500 mb-6 text-center max-w-md">
                             Please create a secure password to complete your account setup and ensure your information stays safe.
                         </p>
@@ -290,7 +290,7 @@ export default function Login() {
 
                 {step === "review" && (
                     <div className="w-full max-w-lg flex flex-col items-center">
-                        <h1 className="text-xl font-normal text-slate-600 mb-2">Review Your Profile</h1>
+                        <h1 className="text-xl font-normal text-slate-600 mb-2">Review your profile</h1>
                         <p className="text-sm text-slate-400 mb-6 text-center max-w-md">
                             Please confirm the details entered by your administrator are correct. You must verify these before making a transaction.
                         </p>

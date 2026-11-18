@@ -311,7 +311,7 @@ export default function CampaignDetails() {
                             </DialogTrigger>
                             <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
                                 <DialogHeader>
-                                    <DialogTitle>Edit Campaign</DialogTitle>
+                                    <DialogTitle>Edit campaign</DialogTitle>
                                     <DialogDescription>
                                         Update your campaign details and settings.
                                     </DialogDescription>
@@ -494,7 +494,7 @@ export default function CampaignDetails() {
                                 </AlertDialogTrigger>
                                 <AlertDialogContent>
                                     <AlertDialogHeader>
-                                        <AlertDialogTitle>Delete Campaign?</AlertDialogTitle>
+                                        <AlertDialogTitle>Delete campaign?</AlertDialogTitle>
                                         <AlertDialogDescription>
                                             Are you sure you want to delete "{campaign.name}"? This action cannot be undone.
                                         </AlertDialogDescription>
@@ -627,7 +627,7 @@ export default function CampaignDetails() {
                                 <Share2 className="w-5 h-5 text-white" />
                             </div>
                             <div>
-                                <h3 className="font-semibold">Share Campaign</h3>
+                                <h3 className="font-semibold">Share campaign</h3>
                                 <p className="text-sm text-muted-foreground">Share this link to collect contributions</p>
                             </div>
                         </div>

@@ -312,10 +312,10 @@ export function SendersPanel() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-border">
-                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Full Name</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Full name</th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Country</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Account Details</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Service Type</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Account details</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Service type</th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Actions</th>
                     </tr>
                   </thead>
@@ -507,7 +507,7 @@ export function SendersPanel() {
                 <CardContent className="p-6 max-h-[85vh] overflow-y-auto">
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-xl font-semibold font-display">
-                      {editingSender ? "Edit Sender" : "Add New Sender"}
+                      {editingSender ? "Edit sender" : "Add new sender"}
                     </h2>
                     <button
                       type="button"
@@ -741,7 +741,7 @@ export function SendersPanel() {
                   <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <Trash2 className="w-6 h-6 text-red-600" />
                   </div>
-                  <h3 className="text-lg font-semibold mb-2">Delete Sender?</h3>
+                  <h3 className="text-lg font-semibold mb-2">Delete sender?</h3>
                   <p className="text-muted-foreground text-sm mb-6">
                     Are you sure you want to delete this sender? This action cannot be undone.
                   </p>

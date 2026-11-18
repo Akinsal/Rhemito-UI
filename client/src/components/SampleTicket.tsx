@@ -26,7 +26,7 @@ const SampleTicket: React.FC = () => {
         {/* Event Details Section */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
           <div>
-            <h3 className="text-xl font-bold text-slate-700 mb-6">Event Details</h3>
+            <h3 className="text-xl font-bold text-slate-700 mb-6">Event details</h3>
             <div className="space-y-3 text-sm">
               <div className="grid grid-cols-[120px_1fr]">
                 <span className="font-bold text-slate-700">Venue Name</span>
@@ -47,7 +47,7 @@ const SampleTicket: React.FC = () => {
             </div>
           </div>
           <div className="text-right">
-            <h3 className="text-xl font-bold text-slate-700">Order No 557427</h3>
+            <h3 className="text-xl font-bold text-slate-700">Order no 557427</h3>
           </div>
         </div>
 
@@ -124,7 +124,7 @@ const SampleTicket: React.FC = () => {
               Ordered by <span className="font-bold text-slate-800">Ehi Ekoma</span> on 08 Feb 2026; 18:39 hrs
             </div>
             <div>
-              <h4 className="font-bold text-slate-800 text-lg mb-1">Ticket Description</h4>
+              <h4 className="font-bold text-slate-800 text-lg mb-1">Ticket description</h4>
               <p className="text-slate-500 text-sm">General Admission - Second Release</p>
               <p className="text-slate-400 text-xs mt-1">Price is inclusive of booking fees and venue facility fee. Non-refundable.</p>
             </div>

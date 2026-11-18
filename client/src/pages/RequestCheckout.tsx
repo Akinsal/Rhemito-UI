@@ -378,7 +378,7 @@ export default function RequestCheckout() {
   if (isError) {
     return (
       <Shell>
-        <StatusCard icon={<Lock className="w-8 h-8 text-slate-600" />} title="Payment Link Invalid" testId="invalid-link">
+        <StatusCard icon={<Lock className="w-8 h-8 text-slate-600" />} title="Payment link invalid" testId="invalid-link">
           <p className="text-sm text-slate-700">This payment link does not exist, has expired, or has already been used.</p>
           <p className="text-xs text-muted-foreground mt-2">If you believe this is an error, please contact the requester or Rhemito Support.</p>
           <Button variant="outline" className="w-full mt-4" onClick={() => setLocation("/")}>
@@ -925,7 +925,7 @@ export default function RequestCheckout() {
   if (step === "session_expired") {
     return (
       <Shell>
-        <StatusCard icon={<Clock className="w-8 h-8 text-amber-600" />} title="Payment Session Expired" testId="session-expired-card">
+        <StatusCard icon={<Clock className="w-8 h-8 text-amber-600" />} title="Payment session expired" testId="session-expired-card">
           <p className="text-sm text-slate-700">No payment was submitted. Start a new session if this request is still available.</p>
           <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white" onClick={() => handleStartPayerFlow()} disabled={busy} data-testid="button-start-new-session">
             {busy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
@@ -949,7 +949,7 @@ export default function RequestCheckout() {
         <Shell>
           <StatusCard
             icon={<Clock className="w-8 h-8 text-amber-600" />}
-            title="Payment Request Expired"
+            title="Payment request expired"
             testId="expired-card"
           >
             <p className="text-sm text-slate-700">
@@ -988,7 +988,7 @@ export default function RequestCheckout() {
         <Shell>
           <StatusCard
             icon={<AlertCircle className="w-8 h-8 text-slate-500" />}
-            title="Request Cancelled"
+            title="Request cancelled"
             testId="cancelled-card"
           >
             <p className="text-sm text-slate-700">
@@ -1052,7 +1052,7 @@ export default function RequestCheckout() {
         <Shell>
           <StatusCard
             icon={<CheckCircle2 className="w-9 h-9 text-emerald-600" />}
-            title="Payment Successful!"
+            title="Payment successful!"
             testId="success-card"
           >
             <div className="rounded-xl bg-emerald-50/70 border border-emerald-200 p-4 text-center space-y-1">
@@ -1129,7 +1129,7 @@ export default function RequestCheckout() {
     if (step === "status" && request.failureReason && ["active", "viewed"].includes(request.status)) {
       return (
         <Shell>
-          <StatusCard icon={<AlertCircle className="w-8 h-8 text-red-600" />} title="Payment Was Not Completed" testId="failed-card">
+          <StatusCard icon={<AlertCircle className="w-8 h-8 text-red-600" />} title="Payment was not completed" testId="failed-card">
             <p className="text-sm text-slate-700">Your payment was not completed. No successful payment was recorded.</p>
             <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white" onClick={() => handleStartPayerFlow()} disabled={busy} data-testid="button-try-again">Try Again</Button>
             <Button variant="outline" className="w-full" onClick={() => setLocation("/")}>Go to Home Page</Button>
@@ -1142,7 +1142,7 @@ export default function RequestCheckout() {
       <Shell>
         <StatusCard
           icon={<Loader2 className="w-8 h-8 animate-spin text-blue-600" />}
-          title="Payment Processing…"
+          title="Payment processing…"
           testId="pending-card"
         >
           <p className="text-sm text-slate-700 text-center">Your transfer has been submitted and is being processed. You will receive a receipt by email once confirmed.</p>
@@ -1165,7 +1165,7 @@ export default function RequestCheckout() {
       <Shell>
         <StatusCard
           icon={<ShieldCheck className="w-8 h-8 text-blue-600" />}
-          title={selectedMethod === "interswitch" ? "Interswitch Hosted Checkout" : "Authorise Your Card Payment"}
+          title={selectedMethod === "interswitch" ? "Interswitch hosted checkout" : "Authorise your card payment"}
           testId="authorize-card"
         >
           <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 space-y-2 text-xs">

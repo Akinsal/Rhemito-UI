@@ -1071,13 +1071,13 @@ export default function Transactions() {
                     <Table>
                       <TableHeader>
                         <TableRow className="hover:bg-transparent bg-gray-50/50 border-b border-gray-100">
-                          <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider w-[100px] sm:w-[150px] py-4 pl-4 sm:pl-6">Ref No.</TableHead>
-                          <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider py-4">Recipient / Sender</TableHead>
-                          <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell py-4">Service</TableHead>
-                          <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider hidden sm:table-cell py-4">Date</TableHead>
-                          <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider text-right py-4 hidden sm:table-cell">Amount</TableHead>
-                          <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider text-center py-4">Status</TableHead>
-                          <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wider text-center py-4">Actions</TableHead>
+                          <TableHead className="text-xs font-semibold text-gray-500 tracking-wider w-[100px] sm:w-[150px] py-4 pl-4 sm:pl-6">Ref no.</TableHead>
+                          <TableHead className="text-xs font-semibold text-gray-500 tracking-wider py-4">Recipient / sender</TableHead>
+                          <TableHead className="text-xs font-semibold text-gray-500 tracking-wider hidden md:table-cell py-4">Service</TableHead>
+                          <TableHead className="text-xs font-semibold text-gray-500 tracking-wider hidden sm:table-cell py-4">Date</TableHead>
+                          <TableHead className="text-xs font-semibold text-gray-500 tracking-wider text-right py-4 hidden sm:table-cell">Amount</TableHead>
+                          <TableHead className="text-xs font-semibold text-gray-500 tracking-wider text-center py-4">Status</TableHead>
+                          <TableHead className="text-xs font-semibold text-gray-500 tracking-wider text-center py-4">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
