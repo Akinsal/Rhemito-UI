@@ -213,3 +213,21 @@
   2. **Contract Sync (`bonus.contract.test.ts` — `BONUS-18`):**
      - Updated `BONUS-18` in both `bonus.contract.test.ts` and `tests/e2e/rewards_contract.spec.js` to assert zero `dashboard-bonus-redemption-modes` pills and `Redeem on send money` on Overview while preserving all balance, guardrail, referee strip, and `/send-money?reward=...` deep-link assertions (following Product Owner live UI `approved` confirmation on `2026-11-18`).
   3. **Superseded Rule:** Earlier `BONUS-18` Overview requirement displaying `Pay less` / `Send more` pills inside `rewards-section-bonus-banners` superseded by `PD-05` (`2026-11-18`).
+
+---
+
+### `DEC-2026-11-18-TRANSACTIONS-PAGE-TABLE-ALIGNMENT` — Align `/transactions` Page Table Design & Layout with Overview `Recent transactions` (`Option 1`)
+- **Date Approved:** 18 November 2026 (`2026-11-18`)
+- **Decision Owner / Approver:** Mohammad Mumtaz (Product Owner — approved via reference screenshot `"Follow this design and layout"` on `feature/align-transactions-page-table`)
+- **Status:** `Release Approved` (`Verified` — Product Owner UI confirmation `approved` on `http://localhost:5000/transactions`, `@verifier` PASS, `82/82` contracts, `319/319` Vitest, `154/154` Playwright E2E green)
+- **Affected Files (`Rhemito-UI`):** `client/src/pages/Transactions.tsx`, `tests/e2e/receipt.spec.js`, `tests/e2e/transactions-navigation.spec.js`, `docs/governance/decisions.md`, `docs/governance/traceability.md`
+- **Summary:**
+  1. **Card Surface, Header & Filter Chips (`Transactions.tsx`):**
+     - Removed legacy `max-w-7xl mx-auto` wrapper (`DashboardLayout.tsx` full-width layout) and aligned the `<Card>` surface 1:1 with Overview (`@container rounded-2xl border border-[#efefee] bg-white shadow-[-2px_4px_16px_0px_rgba(0,0,0,0.04)] overflow-hidden`).
+     - Styled `Transactions` `<h1>` heading to match Overview `Recent transactions` (`font-display font-bold text-base md:text-lg text-[#605e5c] tracking-tight`) while preserving the dedicated right-aligned `input-search-transactions` search box (`PD-01`, including in-memory `row.email` search matching).
+     - Aligned filter chips to Sentence case (`All`, `Send money`, `Receive money`, `Invoices`, `Campaigns`) on white `border-b border-slate-100` (`px-3 py-1 rounded-full text-xs font-medium`).
+  2. **7-Column Table Layout, Formatting & Symmetric `Actions` (`Option 1`):**
+     - Standardized desktop columns to `Order no` (blue circular `ArrowUpRight` / `ArrowDownLeft` + `@4xl` `<OrderNoCell>` tooltip), `Date` (`<DateCellWithGmtTooltip>` `HH:mm GMT` tooltip), `Name` (clean counterparty-only), `Service`, `Amount` (`formatDashboardAmount()` `<Symbol> <2dp>` `tabular-nums`, no `subNote`), `Status` (`.status-light` traffic-light indicators including explicit `failed` state on `SendMoneyRow`), and `Actions` (`px-8 sm:px-10` centered `88px` pills).
+     - Preserved `<SendMoneyReceiptDialog>` non-regressively (`Option 1`): paid Send Money desktop rows display the centered `w-[88px]` `Resend` pill (`#2e5bff`) + floating `MoreVertical` (`⋮`, `button-actions-more-${tx.id}`) containing `View receipt` (`button-receipt-${tx.id}`), matching the `[View] + ⋮` pattern on `Receive money` and `Invoices`; mobile cards retain paired `[Receipt]` + `[Resend]` pills.
+     - Aligned empty state (`Reset filters`), loading `<Skeleton>` rows/cards, `enabled: !isAuthLoading` query gating, `scheduledTransactions` UTC date sort, `transactions-pagination` footer (`Showing X–Y of Z transactions • Page P of T` + `button-prev-page` / `button-next-page`), and regulatory footer note with `Dashboard.tsx`.
+  3. **Superseded Behaviour:** Earlier `/transactions` column order (`Ref no. → Recipient / sender → Service → Date → Amount`), desktop email/type-badge sublines, ISO-code `Amount` + `subNote`, `MoreHorizontal` overflow icon, Title-Case filter chips, and side-by-side desktop `[Receipt] [Resend]` buttons superseded by the unified Overview table layout.
