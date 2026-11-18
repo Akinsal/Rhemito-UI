@@ -1037,9 +1037,9 @@ describe("Refer & Earn card", () => {
 
 describe("Who is signed in", () => {
   rule("REF-17", "The header initials and Dashboard welcome come from the signed-in user (first name, or business name, or email), never from a fixed name", {
-    why: "A hard-coded name once showed another customer's name on every account. The greeting and avatar must always describe the person logged in.",
-    fix: "lib/userDisplay.ts welcomeName(user) and userInitials(user); Dashboard.tsx renders non-bold 'Welcome' with <span className=\"font-bold\">{welcomeName(user)}</span> from useAuth() (PD-03); layout/Header.tsx renders userInitials(user).",
-    where: ["client/src/lib/userDisplay.ts", "client/src/pages/Dashboard.tsx", "client/src/components/layout/Header.tsx"],
+    why: "A hard-coded name once showed another customer's name on every account. The greeting and avatar must always describe the person logged in (or the seeded demo account via GET /api/auth/demo-user when browsing unauthenticated in prototype demo mode).",
+    fix: "lib/userDisplay.ts welcomeName(user) and userInitials(user); Dashboard.tsx and layout/Header.tsx derive activeUser = user ?? demoUser from useAuth() and render non-bold 'Welcome' with <span className=\"font-bold\">{welcomeName(activeUser)}</span> (PD-03) and userInitials(activeUser).",
+    where: ["client/src/lib/userDisplay.ts", "client/src/hooks/use-auth.ts", "client/src/pages/Dashboard.tsx", "client/src/components/layout/Header.tsx", "server/auth.ts"],
   }, () => {
     expect(welcomeName({ accountType: "individual", firstName: "Mohammad", lastName: "Khan", email: "m@x.com" } as any)).toBe("Mohammad");
     expect(welcomeName({ accountType: "individual", firstName: "", email: "fatima.ali@x.com" } as any)).toBe("fatima.ali");
@@ -1050,8 +1050,11 @@ describe("Who is signed in", () => {
 
     const dash = source("client/src/pages/Dashboard.tsx");
     expect(dash).toMatch(/const \{ user \} = useAuth\(\)/);
-    expect(dash).toMatch(/data-testid="dashboard-welcome">Welcome\{welcomeName\(user\) \? <> <span className="font-bold">\{welcomeName\(user\)\}<\/span><\/> : ""\}/);
-    expect(source("client/src/components/layout/Header.tsx")).toMatch(/\{userInitials\(user\)\}/);
+    expect(dash).toMatch(/const activeUser = user \?\? demoUser/);
+    expect(dash).toMatch(/data-testid="dashboard-welcome">Welcome\{welcomeName\(activeUser\) \? <> <span className="font-bold">\{welcomeName\(activeUser\)\}<\/span><\/> : ""\}/);
+    const header = source("client/src/components/layout/Header.tsx");
+    expect(header).toMatch(/const activeUser = user \?\? demoUser/);
+    expect(header).toMatch(/\{userInitials\(activeUser\)\}/);
   });
 
   rule("REF-18", "NEGATIVE (fixed bug): no customer's name is hard-coded in the Dashboard welcome or the header", {

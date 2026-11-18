@@ -32,6 +32,22 @@ export function useAuth() {
     refetchOnWindowFocus: true,
   });
 
+  const { data: demoData } = useQuery<{ user?: AuthUser | null } | null>({
+    queryKey: ["/api/auth/demo-user"],
+    queryFn: async () => {
+      try {
+        const res = await fetch("/api/auth/demo-user", { credentials: "include" });
+        if (!res.ok) return null;
+        return (await res.json()) as { user?: AuthUser | null };
+      } catch {
+        return null;
+      }
+    },
+    enabled: !isLoading && !data?.user,
+    retry: false,
+    staleTime: Infinity,
+  });
+
   const logoutMutation = useMutation({
     mutationFn: async () => {
       await apiRequest("POST", "/api/auth/logout");
@@ -49,6 +65,7 @@ export function useAuth() {
 
   return {
     user: data?.user ?? null,
+    demoUser: demoData?.user ?? null,
     isLoading,
     isAuthenticated: !!data?.user,
     logout: () => logoutMutation.mutate(),

@@ -657,6 +657,24 @@ export function registerAuthRoutes(app: Express) {
   });
 
   // ─── Logout ─────────────────────────────────────────────────────
+  // ─── Get Demo User (Unauthenticated Prototype Preview Only) ────
+  app.get("/api/auth/demo-user", async (_req: Request, res: Response) => {
+    try {
+      if (!demoModeEnabled) {
+        return res.status(404).json({ user: null });
+      }
+      const user = await storage.getAuthUserById("user_123");
+      if (!user) {
+        return res.status(404).json({ user: null });
+      }
+      const { password: _, ...safeUser } = user;
+      return res.json({ user: safeUser });
+    } catch (error) {
+      console.error("Get demo user error:", error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.post("/api/auth/logout", (req: Request, res: Response) => {
     req.session.destroy((err) => {
       if (err) {

@@ -9,9 +9,10 @@ interface HeaderProps {
 }
 
 export function Header({ onMenuClick }: HeaderProps) {
-  const { user } = useAuth();
-  const fullName = user
-    ? [user.firstName, user.lastName].filter(Boolean).join(" ").trim() || welcomeName(user)
+  const { user, demoUser } = useAuth();
+  const activeUser = user ?? demoUser;
+  const fullName = activeUser
+    ? [activeUser.firstName, activeUser.lastName].filter(Boolean).join(" ").trim() || welcomeName(activeUser)
     : "";
 
   return (
@@ -68,7 +69,7 @@ export function Header({ onMenuClick }: HeaderProps) {
               className="text-white font-semibold text-xs leading-none"
               data-testid="header-initials"
             >
-              {userInitials(user)}
+              {userInitials(activeUser)}
             </span>
           </div>
           <div className="hidden sm:flex flex-col items-start leading-tight">
@@ -81,7 +82,7 @@ export function Header({ onMenuClick }: HeaderProps) {
               className="text-[11px] text-slate-400 font-normal"
               data-testid="header-profile-label"
             >
-              {profileLabel(user)}
+              {profileLabel(activeUser)}
             </span>
           </div>
         </div>

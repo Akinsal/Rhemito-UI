@@ -894,7 +894,8 @@ export default function Dashboard() {
   const searchParams = useSearch();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { isLoading: isAuthLoading } = useAuth();
+  const { demoUser, isLoading: isAuthLoading } = useAuth();
+  const activeUser = user ?? demoUser;
   // Referral & Bonus — live offer, wallet and referrals from the rewards API
   const rewards = useRewards();
   const rewardsCurrency = rewards.data?.currency ?? "GBP";
@@ -1236,7 +1237,7 @@ export default function Dashboard() {
               variants={itemVariants}
               className="shrink-0 text-2xl font-normal tracking-tight text-[#323130] md:text-[28px]"
             >
-              <span data-testid="dashboard-welcome">Welcome{welcomeName(user) ? <> <span className="font-bold">{welcomeName(user)}</span></> : ""}</span>
+              <span data-testid="dashboard-welcome">Welcome{welcomeName(activeUser) ? <> <span className="font-bold">{welcomeName(activeUser)}</span></> : ""}</span>
             </motion.h1>
 
             {false && bonusBalance.available > 0 && (
