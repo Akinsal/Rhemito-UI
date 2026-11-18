@@ -250,7 +250,7 @@ export default function NotificationPreferences(): React.JSX.Element {
           <ChevronLeft className="w-5 h-5 text-muted-foreground" />
         </button>
         <h1 className="font-display text-[16px] font-semibold text-foreground">
-          Notification Preferences
+          Notification preferences
         </h1>
       </div>
 
@@ -259,7 +259,7 @@ export default function NotificationPreferences(): React.JSX.Element {
 
         {/* Channels */}
         <section>
-          <h2 className="font-display text-[14px] font-semibold text-muted-foreground uppercase tracking-wide mb-2 px-1">
+          <h2 className="font-display text-[14px] font-semibold text-muted-foreground tracking-wide mb-2 px-1">
             Channels
           </h2>
           <div className="bg-card border border-border rounded-xl px-4">
@@ -298,8 +298,8 @@ export default function NotificationPreferences(): React.JSX.Element {
 
         {/* Event Types */}
         <section>
-          <h2 className="font-display text-[14px] font-semibold text-muted-foreground uppercase tracking-wide mb-2 px-1">
-            Event Types
+          <h2 className="font-display text-[14px] font-semibold text-muted-foreground tracking-wide mb-2 px-1">
+            Event types
           </h2>
           <div className="bg-card border border-border rounded-xl px-4">
             <EventRow
@@ -359,8 +359,8 @@ export default function NotificationPreferences(): React.JSX.Element {
 
         {/* Quiet Hours */}
         <section>
-          <h2 className="font-display text-[14px] font-semibold text-muted-foreground uppercase tracking-wide mb-2 px-1">
-            Quiet Hours
+          <h2 className="font-display text-[14px] font-semibold text-muted-foreground tracking-wide mb-2 px-1">
+            Quiet hours
           </h2>
           <div className="bg-card border border-border rounded-xl px-4 py-3.5 space-y-4">
             {/* Toggle */}

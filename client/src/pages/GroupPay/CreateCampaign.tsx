@@ -161,7 +161,7 @@ export default function CreateCampaign() {
                         </Button>
                     </Link>
                     <div>
-                        <h1 className="text-2xl font-bold font-display">Create Funding Campaign</h1>
+                        <h1 className="text-2xl font-bold font-display">Create funding campaign</h1>
                         <p className="text-muted-foreground">Set up a new funding collection</p>
                     </div>
                 </div>
@@ -401,7 +401,7 @@ export default function CreateCampaign() {
                                     >
                                         <Sparkles className="w-8 h-8" />
                                     </motion.div>
-                                    <h2 className="text-2xl font-bold mb-2">Campaign Created!</h2>
+                                    <h2 className="text-2xl font-bold mb-2">Campaign created!</h2>
                                     <p className="text-green-100">Your funding campaign is ready to share</p>
                                 </div>
 

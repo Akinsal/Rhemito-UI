@@ -239,6 +239,37 @@ export function registerRequestMoneyRoutes(app: Express): void {
     }
   });
 
+  app.delete("/api/request-money/payout-accounts/:id", async (req, res) => {
+    try {
+      const userId = requireStrictAuth(req);
+      const acc = await storage.getPayoutAccountById(req.params.id);
+      if (!acc || acc.ownerId !== userId) {
+        return res.status(404).json({ error: { code: "NOT_FOUND", message: "Bank account not found." } });
+      }
+      await storage.deletePayoutAccount(acc.id);
+      res.json({ data: { deleted: true } });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
+  app.patch("/api/request-money/payout-accounts/:id/default", async (req, res) => {
+    try {
+      const userId = requireStrictAuth(req);
+      const acc = await storage.getPayoutAccountById(req.params.id);
+      if (!acc || acc.ownerId !== userId) {
+        return res.status(404).json({ error: { code: "NOT_FOUND", message: "Bank account not found." } });
+      }
+      const owned = await storage.listPayoutAccountsByOwner(userId);
+      for (const a of owned) {
+        await storage.updatePayoutAccount(a.id, { isDefault: a.id === acc.id });
+      }
+      res.json({ data: { id: acc.id, isDefault: true } });
+    } catch (err) {
+      return handleError(res, err);
+    }
+  });
+
   // ─── Requests (authenticated) ───────────────────────────────────────────────
 
   app.post("/api/request-money/requests", async (req, res) => {

@@ -59,7 +59,7 @@ export function MoneyRequestDetailsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg" data-testid="dialog-request-details">
         <DialogHeader>
-          <DialogTitle className="font-display text-lg">Money Request Details</DialogTitle>
+          <DialogTitle className="font-display text-lg">Money request details</DialogTitle>
           <DialogDescription>
             Track this request across its lifecycle — link, email and QR all share one secure URL
           </DialogDescription>

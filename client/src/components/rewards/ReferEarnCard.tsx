@@ -83,7 +83,7 @@ export function ReferEarnCard({
   if (isError) {
     return (
       <Card className="h-full rounded-2xl border border-slate-200/80 bg-white p-5 flex flex-col shadow-2xs" data-testid="refer-earn-error">
-        <h2 className="font-display text-lg sm:text-xl font-bold text-slate-900">Refer &amp; Earn</h2>
+        <h2 className="font-display text-lg sm:text-xl font-bold text-slate-900">Refer &amp; earn</h2>
         <div className="flex flex-1 flex-col items-center justify-center gap-3 py-6 text-center" role="alert">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-500">
             <RefreshCw className="h-5 w-5" aria-hidden="true" />
@@ -243,7 +243,7 @@ export function ReferEarnCard({
                   data-testid="toggle-refer-earn-card"
                   className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-white hover:bg-blue-50 px-3 py-1 text-xs font-semibold text-[#2e5bff] transition-colors cursor-pointer"
                 >
-                  <span>{collapsed ? "Show Refer & Earn" : "Hide"}</span>
+                  <span>{collapsed ? "Show Refer & earn" : "Hide"}</span>
                   {collapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
                 </button>
               )}
@@ -262,7 +262,7 @@ export function ReferEarnCard({
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex flex-col items-start">
                       <h2 className="font-display text-3xl sm:text-[42px] font-bold text-[#323130] leading-[1.12] tracking-tight">
-                        Invite and Get
+                        Invite and get
                       </h2>
                       <p className="font-display text-3xl sm:text-[42px] font-bold text-[#323130] leading-[1.12] tracking-tight">
                         {formatMoney(activeOffer.referrer_reward, activeOffer.currency)}

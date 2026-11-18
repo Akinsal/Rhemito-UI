@@ -53,8 +53,8 @@ export default function Marketing() {
                         </div>
 
                         <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold font-display tracking-tight mb-6 leading-[1.05]">
-                            Your Money, <br />
-                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-teal">Without Borders.</span>
+                            Your money, <br />
+                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-teal">without borders.</span>
                         </h1>
 
                         <p className="text-lg text-slate-500 mb-8 leading-relaxed">
@@ -110,7 +110,7 @@ export default function Marketing() {
                                         <Gift className="w-7 h-7 drop-shadow-md" />
                                     </div>
                                     <div>
-                                        <h3 className="text-2xl font-bold text-white mb-2 tracking-tight">First Transfer Free</h3>
+                                        <h3 className="text-2xl font-bold text-white mb-2 tracking-tight">First transfer free</h3>
                                         <p className="text-blue-100 text-sm leading-relaxed mb-5 opacity-90 font-medium">
                                             Send up to £500 with absolutely <span className="text-white font-bold underline decoration-blue-300/50 underline-offset-2">zero fees</span>. Experience our premium speed on the house.
                                         </p>
@@ -130,7 +130,7 @@ export default function Marketing() {
                                         <ShieldCheck className="w-7 h-7" />
                                     </div>
                                     <div>
-                                        <h3 className="text-xl font-bold text-slate-900 mb-2">Best Rate Guarantee</h3>
+                                        <h3 className="text-xl font-bold text-slate-900 mb-2">Best rate guarantee</h3>
                                         <p className="text-slate-600 text-sm leading-relaxed mb-5">
                                             Find a better rate elsewhere? We'll <span className="font-bold text-teal-700">match it</span> and credit your account with £5 immediately.
                                         </p>

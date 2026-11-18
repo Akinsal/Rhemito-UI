@@ -611,7 +611,7 @@ export default function MobilePaymentSimulator() {
             
             {/* Header info */}
             <div className="hidden md:block text-center mb-6">
-                <h1 className="text-2xl font-bold text-slate-800">Mobile Send Money Prototype</h1>
+                <h1 className="text-2xl font-bold text-slate-800">Mobile send money prototype</h1>
                 <p className="text-sm text-slate-500 mt-1">Realistic smartphone simulator demonstrating the 3-step payment flow</p>
             </div>
 
@@ -1096,9 +1096,9 @@ export default function MobilePaymentSimulator() {
 
                                     {/* Recipient Details Form */}
                                     <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3.5 shadow-sm">
-                                        <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider border-b pb-1.5 border-slate-100 flex items-center gap-1.5">
+                                        <h3 className="text-xs font-extrabold text-slate-800 tracking-wider border-b pb-1.5 border-slate-100 flex items-center gap-1.5">
                                             <span className="w-1.5 h-3 bg-blue-600 rounded-full" />
-                                            Recipient Details
+                                            Recipient details
                                         </h3>
 
                                         {/* Individual vs Business Toggle */}
@@ -1145,7 +1145,7 @@ export default function MobilePaymentSimulator() {
                                                         <Building2 className="w-4 h-4" />
                                                     </div>
                                                     <div className="text-left leading-tight">
-                                                        <h4 className="text-[10px] font-bold text-slate-800">Direct To Bank</h4>
+                                                        <h4 className="text-[10px] font-bold text-slate-800">Direct to bank</h4>
                                                         <span className="text-[8px] text-slate-400 font-semibold block">Local transfers - 30mins</span>
                                                     </div>
                                                 </div>
@@ -1307,9 +1307,9 @@ export default function MobilePaymentSimulator() {
 
                                     {/* Banking Details Card */}
                                     <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3 shadow-sm">
-                                        <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider border-b pb-1.5 border-slate-100 flex items-center gap-1.5">
+                                        <h3 className="text-xs font-extrabold text-slate-800 tracking-wider border-b pb-1.5 border-slate-100 flex items-center gap-1.5">
                                             <span className="w-1.5 h-3 bg-blue-600 rounded-full" />
-                                            Banking Details
+                                            Banking details
                                         </h3>
                                         <div className="space-y-1">
                                             <Label className="text-[10px] font-bold text-slate-500">Bank name</Label>
@@ -1368,7 +1368,7 @@ export default function MobilePaymentSimulator() {
                                                     <CheckCircle2 className="w-3.5 h-3.5 text-white" />
                                                 </div>
                                                 <div className="flex-1 space-y-0.5">
-                                                    <h4 className="text-[10px] font-bold font-display leading-tight">Recipient Verified</h4>
+                                                    <h4 className="text-[10px] font-bold font-display leading-tight">Recipient verified</h4>
                                                     <p className="text-[8px] text-emerald-100 font-semibold leading-relaxed">
                                                         We've successfully verified the bank account details for <strong>{selectedRecipient?.name}</strong>. It is safe to proceed.
                                                     </p>
@@ -1565,7 +1565,7 @@ export default function MobilePaymentSimulator() {
 
                                     {/* Title / Description */}
                                     <div className="space-y-2">
-                                        <h3 className="text-xl font-black text-slate-800">Transfer Successful!</h3>
+                                        <h3 className="text-xl font-black text-slate-800">Transfer successful!</h3>
                                         <p className="text-xs text-slate-500 max-w-[250px] mx-auto leading-relaxed">
                                             Your transaction has been submitted and funds are on their way to your recipient.
                                         </p>
@@ -1573,8 +1573,8 @@ export default function MobilePaymentSimulator() {
 
                                     {/* Receipt Card */}
                                     <div className="w-full bg-white rounded-3xl border border-slate-200 p-4 shadow-sm space-y-3.5 text-left">
-                                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-wider border-b pb-1.5 border-slate-100">
-                                            Receipt Details
+                                        <h4 className="text-[10px] font-black text-slate-400 tracking-wider border-b pb-1.5 border-slate-100">
+                                            Receipt details
                                         </h4>
                                         
                                         <div className="space-y-2.5 text-xs">
@@ -1728,7 +1728,7 @@ export default function MobilePaymentSimulator() {
                                     <div className="flex justify-between items-center border-b pb-3 border-slate-100">
                                         <h3 className="text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
                                             <span className="w-1.5 h-3.5 bg-blue-600 rounded-full" />
-                                            Add New Recipient
+                                            Add new recipient
                                         </h3>
                                         <div className="flex items-center gap-2">
                                             <button
@@ -1794,7 +1794,7 @@ export default function MobilePaymentSimulator() {
                                                     <Building2 className="w-4 h-4" />
                                                 </div>
                                                 <div className="text-left leading-tight">
-                                                    <h4 className="text-[10px] font-bold text-slate-800">Direct To Bank</h4>
+                                                    <h4 className="text-[10px] font-bold text-slate-800">Direct to bank</h4>
                                                     <span className="text-[8px] text-slate-400 font-semibold block">Local transfers - 30mins</span>
                                                 </div>
                                             </div>
@@ -1823,8 +1823,8 @@ export default function MobilePaymentSimulator() {
                                     {/* Recipient Details */}
                                     <div className="space-y-3.5 text-xs">
                                         <div className="border-t pt-3 border-slate-100">
-                                            <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                                                Recipient Details
+                                            <h4 className="text-[10px] font-bold text-slate-500 tracking-wider">
+                                                Recipient details
                                             </h4>
                                         </div>
 
@@ -1967,8 +1967,8 @@ export default function MobilePaymentSimulator() {
 
                                     {/* Banking Details */}
                                     <div className="border-t pt-3 border-slate-100 space-y-3">
-                                        <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                                            Banking Details
+                                        <h4 className="text-[10px] font-bold text-slate-500 tracking-wider">
+                                            Banking details
                                         </h4>
 
                                         {showScrapeAlert && (
@@ -2073,7 +2073,7 @@ export default function MobilePaymentSimulator() {
                                         <Building2 className="w-7 h-7" />
                                     </div>
                                     <div className="space-y-0.5">
-                                        <h3 className="text-sm font-extrabold text-slate-900 tracking-tight">Confirm Payment Method</h3>
+                                        <h3 className="text-sm font-extrabold text-slate-900 tracking-tight">Confirm payment method</h3>
                                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Manual Bank Transfer</p>
                                     </div>
                                     <p className="text-xs text-slate-500 leading-relaxed px-1">
@@ -2137,7 +2137,7 @@ export default function MobilePaymentSimulator() {
                                     <div className="flex justify-between items-center border-b pb-3 border-slate-100">
                                         <h3 className="text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
                                             <span className="w-1.5 h-3.5 bg-blue-600 rounded-full" />
-                                            Edit Recipient Details
+                                            Edit recipient details
                                         </h3>
                                         <button
                                             onClick={() => setShowEditModal(false)}
@@ -2191,7 +2191,7 @@ export default function MobilePaymentSimulator() {
                                                     <Building2 className="w-4 h-4" />
                                                 </div>
                                                 <div className="text-left leading-tight">
-                                                    <h4 className="text-[10px] font-bold text-slate-800">Direct To Bank</h4>
+                                                    <h4 className="text-[10px] font-bold text-slate-800">Direct to bank</h4>
                                                     <span className="text-[8px] text-slate-400 font-semibold block">Local transfers - 30mins</span>
                                                 </div>
                                             </div>
@@ -2220,8 +2220,8 @@ export default function MobilePaymentSimulator() {
                                     {/* Recipient Details */}
                                     <div className="space-y-3.5 text-xs">
                                         <div className="border-t pt-3 border-slate-100">
-                                            <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                                                Recipient Details
+                                            <h4 className="text-[10px] font-bold text-slate-500 tracking-wider">
+                                                Recipient details
                                             </h4>
                                         </div>
 
@@ -2364,8 +2364,8 @@ export default function MobilePaymentSimulator() {
 
                                     {/* Banking Details */}
                                     <div className="border-t pt-3 border-slate-100 space-y-3">
-                                        <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                                            Banking Details
+                                        <h4 className="text-[10px] font-bold text-slate-500 tracking-wider">
+                                            Banking details
                                         </h4>
                                         <div className="space-y-1 text-xs">
                                             <Label className="text-[10px] font-bold text-slate-500">Bank Name*</Label>
@@ -2456,8 +2456,8 @@ export default function MobilePaymentSimulator() {
                                     <div className="flex justify-between items-center border-b pb-3 border-slate-800">
                                         <div className="flex items-center gap-2">
                                             <Camera className="w-4 h-4 text-blue-500 animate-pulse" />
-                                            <h3 className="text-xs font-black tracking-wider uppercase text-slate-200">
-                                                Scan & Extract Details
+                                            <h3 className="text-xs font-black tracking-wider text-slate-200">
+                                                Scan & extract details
                                             </h3>
                                         </div>
                                         <button

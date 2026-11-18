@@ -33,6 +33,7 @@ import Login from "@/pages/Auth/Login";
 import SignInSignUp from "@/pages/Auth/SignInSignUp";
 import LandingPage from "@/pages/LandingPage";
 import NotificationPreferences from "@/pages/NotificationPreferences";
+import Settings from "@/pages/Settings";
 import NotificationArchive from "@/pages/NotificationArchive";
 import NotificationDetail from "@/pages/NotificationDetail";
 import BankTransferDesigns from "@/pages/BankTransferDesigns";
@@ -109,6 +110,7 @@ function Router() {
       <Route path="/sign-in-sign-up" component={SignInSignUp} />
       <Route path="/home" component={LandingPage} />
       <Route path="/settings/notifications" component={NotificationPreferences} />
+      <Route path="/settings" component={Settings} />
       <Route path="/notifications/archive" component={NotificationArchive} />
       <Route path="/notifications/:id" component={NotificationDetail} />
       <Route path="/bank-transfer-designs" component={BankTransferDesigns} />

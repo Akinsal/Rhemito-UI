@@ -148,7 +148,7 @@ export default function GroupPayDashboard() {
                     <div>
                         <p className="text-sm text-muted-foreground">Home / Funding Campaigns</p>
                         <div className="flex items-center gap-2 mt-1">
-                            <h1 className="text-2xl font-bold font-display">Funding Campaigns</h1>
+                            <h1 className="text-2xl font-bold font-display">Funding campaigns</h1>
                             <span className="bg-gray-100 text-gray-600 text-xs font-medium px-2.5 py-0.5 rounded-full">
                                 {filteredCampaigns.length}
                             </span>
@@ -418,7 +418,7 @@ export default function GroupPayDashboard() {
                                                                 </AlertDialogTrigger>
                                                                 <AlertDialogContent>
                                                                     <AlertDialogHeader>
-                                                                        <AlertDialogTitle>Delete Campaign?</AlertDialogTitle>
+                                                                        <AlertDialogTitle>Delete campaign?</AlertDialogTitle>
                                                                         <AlertDialogDescription>
                                                                             Are you sure you want to delete "{campaign.name}"? This action cannot be undone.
                                                                         </AlertDialogDescription>

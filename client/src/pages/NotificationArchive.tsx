@@ -206,7 +206,7 @@ export default function NotificationArchive(): React.JSX.Element {
           <ChevronLeft className="w-5 h-5 text-muted-foreground" />
         </button>
         <h1 className="font-display text-[16px] font-semibold text-foreground">
-          Notification Archive
+          Notification archive
         </h1>
       </div>
 

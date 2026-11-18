@@ -23,7 +23,7 @@ export function LegalStrip({ className }: LegalStripProps) {
         className="whitespace-nowrap font-medium text-blue-600 hover:text-blue-700 transition-colors cursor-pointer"
         onClick={(e) => e.preventDefault()}
       >
-        Privacy Policy
+        Privacy policy
       </button>
       <button
         type="button"

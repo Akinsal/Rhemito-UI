@@ -1,6 +1,42 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Rhemito Send Money Flow', () => {
+    // Isolate from live Mito Staging beneficiaries: serve one fully-populated saved beneficiary (same shape as staging_payment_gateway.spec.js)
+    test.beforeEach(async ({ page }) => {
+        await page.route('**/api/send-money/mito/beneficiaries*', (route) => {
+            if (route.request().method() !== 'GET') return route.fallback();
+            return route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({
+                    data: {
+                        configured: true,
+                        beneficiaries: [{
+                            beneficiaryId: '11111111-2222-3333-4444-555555555555',
+                            name: 'Akshita',
+                            firstName: 'Akshita',
+                            lastName: 'Sharma',
+                            legalEntityType: 'individual',
+                            providerId: 'e3af932a-0326-4b65-b5f4-e8f753a69d4d',
+                            bankName: 'United Bank for Africa Plc (UBA)',
+                            acctNumber: '1018316888',
+                            relationship: 'FRIEND',
+                            reason: 'FOROWNEXPENDITURES',
+                            narration: 'Family allowance',
+                            address: '12 Marina Road',
+                            city: 'Lagos',
+                            postcode: '100001',
+                            stateOrProvince: 'Lagos',
+                            mobileNo: '08031234567',
+                            currency: 'NGN',
+                            country: 'Nigeria',
+                            countryIso3: 'NGA',
+                        }],
+                    },
+                }),
+            });
+        });
+    });
 
     test('Navigate to Send Money page', async ({ page }) => {
         await page.goto('/send-money');
@@ -39,7 +75,7 @@ test.describe('Rhemito Send Money Flow', () => {
         await page.getByRole('button', { name: 'New Recipient' }).click();
 
         // Verify moved to details step
-        await expect(page.getByText('Recipient Details')).toBeVisible({ timeout: 5000 });
+        await expect(page.getByText('Recipient Details').first()).toBeVisible({ timeout: 5000 });
     });
 
     test('Complete Send Money flow (Step 1 to Step 4 Payment Method)', async ({ page }) => {
@@ -56,7 +92,7 @@ test.describe('Rhemito Send Money Flow', () => {
         await page.getByText('Akshita', { exact: true }).first().click();
 
         // Step 3: Details (prefilled, click Continue submits the real server-owned transaction)
-        await expect(page.getByText('Recipient Details')).toBeVisible();
+        await expect(page.getByText('Recipient Details').first()).toBeVisible();
         await page.getByRole('button', { name: 'Continue' }).click();
 
         // Step 4: Payment Method
@@ -74,7 +110,7 @@ test.describe('Rhemito Send Money Flow', () => {
 
         // Step 2: Pick a known recipient
         await page.getByText('Akshita', { exact: true }).first().click();
-        await expect(page.getByText('Recipient Details')).toBeVisible();
+        await expect(page.getByText('Recipient Details').first()).toBeVisible();
 
         // Step 3: Continue creates the real transaction (awaiting_payment)
         await page.getByRole('button', { name: 'Continue' }).click();

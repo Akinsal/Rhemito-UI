@@ -1025,12 +1025,12 @@ export default function PayoutAccounts() {
               <table className="w-full bg-white rounded-lg overflow-hidden shadow-sm">
                 <thead className="bg-primary text-white">
                   <tr>
-                    <th className="py-3 px-4 text-left text-sm font-medium">Ref No</th>
-                    <th className="py-3 px-4 text-left text-sm font-medium">Account Holder</th>
+                    <th className="py-3 px-4 text-left text-sm font-medium">Ref no</th>
+                    <th className="py-3 px-4 text-left text-sm font-medium">Account holder</th>
                     <th className="py-3 px-4 text-left text-sm font-medium">Currency</th>
                     <th className="py-3 px-4 text-left text-sm font-medium">Bank</th>
-                    <th className="py-3 px-4 text-left text-sm font-medium">Account Number</th>
-                    <th className="py-3 px-4 text-left text-sm font-medium">Bank Details</th>
+                    <th className="py-3 px-4 text-left text-sm font-medium">Account number</th>
+                    <th className="py-3 px-4 text-left text-sm font-medium">Bank details</th>
                     <th className="py-3 px-4 text-left text-sm font-medium">Payout</th>
                     <th className="py-3 px-4 text-left text-sm font-medium">Activated</th>
                     <th className="py-3 px-4 text-left text-sm font-medium">Action</th>
@@ -1135,7 +1135,7 @@ export default function PayoutAccounts() {
                   <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <Trash2 className="w-6 h-6 text-red-600" />
                   </div>
-                  <h3 className="text-lg font-semibold mb-2">Delete Account?</h3>
+                  <h3 className="text-lg font-semibold mb-2">Delete account?</h3>
                   <p className="text-muted-foreground text-sm mb-6">
                     Are you sure you want to delete this settlement bank account? This action cannot be undone.
                   </p>

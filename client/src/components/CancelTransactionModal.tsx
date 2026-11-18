@@ -72,7 +72,7 @@ export function CancelTransactionModal({
           {/* Title & Description */}
           <div className="text-center space-y-2">
             <AlertDialogTitle className="font-display text-lg font-semibold text-gray-900">
-              Cancel Transaction?
+              Cancel transaction?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-sm text-muted-foreground leading-relaxed">
               This action cannot be undone. The following transaction will be permanently cancelled.

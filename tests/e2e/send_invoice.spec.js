@@ -526,7 +526,7 @@ test.describe('Send Invoice MVP1 E2E', () => {
     await expect(page.getByTestId(`button-cancel-${invoice.invoiceNumber}`)).toBeVisible();
   });
 
-  test('Dashboard search narrows invoice rows and cancelled status is reflected', async ({ page }) => {
+  test('Transactions search narrows invoice rows and cancelled status is reflected on the dashboard', async ({ page }) => {
     const { request, email: senderEmail } = await setupSender(page);
     const emailA = `search-a-${uniqueSuffix()}@example.com`;
     const emailB = `search-b-${uniqueSuffix()}@example.com`;
@@ -534,7 +534,8 @@ test.describe('Send Invoice MVP1 E2E', () => {
     const invA = await createInvoiceViaApi(request, { clientEmail: emailA, clientFirstName: 'Zara', clientLastName: 'Search-A' });
     await createInvoiceViaApi(request, { clientEmail: emailB, clientFirstName: 'Zara', clientLastName: 'Search-B' });
 
-    await page.goto('/?type=invoice');
+    // The inline search lives on the Transactions page (the dashboard no longer has a search box)
+    await page.goto('/transactions?type=invoice');
 
     // Search by invoice number narrows to one row
     await page.getByTestId('input-search-transactions').fill(invA.invoice.invoiceNumber);
@@ -550,6 +551,10 @@ test.describe('Send Invoice MVP1 E2E', () => {
     await page.getByTestId('input-search-transactions').fill(emailA);
     await expect(page.getByTestId(`row-invoice-${invA.invoice.invoiceNumber}`).getByText('Cancelled', { exact: true })).toBeVisible({ timeout: 30000 });
     await expect(page.locator('[data-testid^="row-invoice-"]')).toHaveCount(1);
+
+    // The dashboard (/?type=invoice) reflects the cancelled status too
+    await page.goto('/?type=invoice');
+    await expect(page.getByTestId(`row-invoice-${invA.invoice.invoiceNumber}`).getByText('Cancelled', { exact: true })).toBeVisible({ timeout: 30000 });
 
     // No edit-style actions exist anywhere on the dashboard
     await expect(page.getByRole('button', { name: /^Edit$/ })).toHaveCount(0);

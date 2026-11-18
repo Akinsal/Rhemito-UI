@@ -7,7 +7,7 @@ import {
   Send, Receipt, ArrowRight, Gift, Copy, Check, Sparkles, Search, 
   ArrowUpRight, ArrowDownLeft, ChevronLeft, ChevronRight, Mail, 
   XCircle, FilePlus2, FileText, Users, CreditCard, Wallet, 
-  Building2, X, MoreHorizontal 
+  Building2, X, MoreVertical 
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -24,6 +24,7 @@ import { cancelRequest, getRequests, resendEmail, type MoneyRequestView } from "
 import { invoiceListUrl, resendInvoiceNotificationRequest, type InvoiceListItem, type InvoiceListResponse } from "@/lib/invoices";
 import { fetchCampaigns } from "@/lib/groupPay";
 import { cancelSendMoneyTransaction, getSendMoneyTransactions, toSendMoneyRow } from "@/lib/sendMoney";
+import { CURRENCY_SYMBOLS } from "@shared/currencies";
 import {
   DEMO_GBP_COLLECTION_BALANCE,
   DEMO_GBP_TOTAL_SENT,
@@ -123,8 +124,8 @@ const TRANSACTIONS_PAGE_SIZE = 20;
 
 const TYPE_FILTERS: { value: TypeFilter; label: string }[] = [
   { value: "all", label: "All" },
-  { value: "send_money", label: "Send Money" },
-  { value: "receive_money", label: "Receive Money" },
+  { value: "send_money", label: "Send money" },
+  { value: "receive_money", label: "Receive money" },
   { value: "invoice", label: "Invoices" },
   { value: "campaign", label: "Campaigns" },
 ];
@@ -134,7 +135,101 @@ type MergedRow =
   | { kind: "send_money"; scheduled: boolean; dateSort: number; tx: SendMoneyTx }
   | { kind: "receive_money" | "invoice" | "campaign"; dateSort: number; row: UnifiedTransactionRow };
 
-function SendMoneyRow({ tx, scheduled, onCancel }: { tx: SendMoneyTx; scheduled: boolean; onCancel: (tx: SendMoneyTx) => void }) {
+function formatGmtTime24(timestampMs: number, dateLabel: string): string | null {
+  if (!dateLabel || dateLabel === "—") return null;
+  const ms = timestampMs > 0 ? timestampMs : Date.parse(`${dateLabel} 00:00:00 GMT`);
+  if (!Number.isFinite(ms) || ms <= 0) return null;
+  const d = new Date(ms);
+  const hh = String(d.getUTCHours()).padStart(2, "0");
+  const mm = String(d.getUTCMinutes()).padStart(2, "0");
+  return `${hh}:${mm} GMT`;
+}
+
+function formatDashboardAmount(rawAmount: string): string {
+  const codeMatch = rawAmount.match(/\b([A-Z]{3})\b/);
+  const code = codeMatch?.[1];
+  let symbol = code ? CURRENCY_SYMBOLS[code] : undefined;
+  if (!symbol && code) {
+    try {
+      const parts = new Intl.NumberFormat("en-GB", {
+        style: "currency",
+        currency: code,
+        currencyDisplay: "narrowSymbol",
+      }).formatToParts(0);
+      symbol = parts.find((p) => p.type === "currency")?.value;
+    } catch {
+      symbol = undefined;
+    }
+  }
+  const numMatch = rawAmount.replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
+  if (!numMatch) return rawAmount;
+  const formattedNum = formatAccountAmount(Number(numMatch[0]));
+  return symbol ? `${symbol} ${formattedNum}` : formattedNum;
+}
+
+function DateCellWithGmtTooltip({ dateLabel, timestampMs }: { dateLabel: string; timestampMs: number }) {
+  const gmtTime = formatGmtTime24(timestampMs, dateLabel);
+  if (!gmtTime) {
+    return <span>{dateLabel}</span>;
+  }
+  return (
+    <Tooltip delayDuration={150}>
+      <TooltipTrigger asChild>
+        <span
+          tabIndex={0}
+          className="cursor-default border-b border-dotted border-transparent hover:border-slate-400 transition-colors focus-visible:outline-none"
+        >
+          {dateLabel}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent
+        side="top"
+        className="bg-foreground text-background px-2.5 py-1 text-xs font-medium shadow-sm tabular-nums"
+      >
+        {gmtTime}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function OrderNoCell({ orderNo }: { orderNo: string }) {
+  const compact = orderNo.length > 2 ? `${orderNo.slice(0, 2)}...` : orderNo;
+  return (
+    <>
+      <span className="hidden @4xl:inline tracking-tight whitespace-nowrap">
+        {orderNo}
+      </span>
+      <Tooltip delayDuration={150}>
+        <TooltipTrigger asChild>
+          <span
+            tabIndex={0}
+            className="inline @4xl:hidden tracking-tight whitespace-nowrap cursor-default border-b border-dotted border-transparent hover:border-slate-400 transition-colors focus-visible:outline-none"
+          >
+            {compact}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent
+          side="top"
+          className="bg-foreground text-background px-2.5 py-1 text-xs font-medium shadow-sm tabular-nums"
+        >
+          {orderNo}
+        </TooltipContent>
+      </Tooltip>
+    </>
+  );
+}
+
+function SendMoneyRow({
+  tx,
+  dateSort,
+  scheduled,
+  onCancel,
+}: {
+  tx: SendMoneyTx;
+  dateSort: number;
+  scheduled: boolean;
+  onCancel: (tx: SendMoneyTx) => void;
+}) {
   // Resend is offered ONLY for terminal (settled) statuses.
   // Terminal = completed (successful), failed, cancelled (aborted).
   // In-flight states (awaiting_payment, pending, scheduled) never show Resend.
@@ -155,25 +250,21 @@ function SendMoneyRow({ tx, scheduled, onCancel }: { tx: SendMoneyTx; scheduled:
           <span className="w-5 h-5 rounded-full border border-blue-500 text-blue-600 flex items-center justify-center shrink-0">
             <ArrowUpRight className="w-3 h-3" aria-hidden />
           </span>
-          <span className="tracking-tight">{tx.id}</span>
+          <OrderNoCell orderNo={tx.id} />
         </div>
-        <div className="text-xs font-bold text-gray-900 mt-0.5 sm:hidden pl-7">{tx.amount}</div>
+        <div className="text-xs font-bold text-gray-900 mt-0.5 sm:hidden pl-7 tabular-nums">{formatDashboardAmount(tx.amount)}</div>
       </TableCell>
       <TableCell className="text-slate-500 text-[13px] hidden sm:table-cell py-4">
-        <span>{tx.date}</span>
+        <DateCellWithGmtTooltip dateLabel={tx.date} timestampMs={dateSort} />
       </TableCell>
       <TableCell className="text-[13px] font-medium text-slate-700 py-4">
         <div>{tx.recipient}</div>
-        <div className="mt-0.5 flex items-center gap-1.5 text-[10px] font-medium text-slate-400">
-          <span className={cn("w-1.5 h-1.5 rounded-full", TYPE_BADGES.send_money.dot)} />
-          {TYPE_BADGES.send_money.label}
-        </div>
       </TableCell>
       <TableCell className="text-slate-500 text-[13px] hidden md:table-cell py-4">
         <span>{tx.service}</span>
       </TableCell>
       <TableCell className="text-slate-600 text-[13px] font-normal py-4 hidden sm:table-cell">
-        <span>{tx.amount}</span>
+        <span className="tabular-nums whitespace-nowrap">{formatDashboardAmount(tx.amount)}</span>
       </TableCell>
       <TableCell className="text-center py-4">
         {scheduled ? (
@@ -251,8 +342,8 @@ function SendMoneyRow({ tx, scheduled, onCancel }: { tx: SendMoneyTx; scheduled:
           </div>
         )}
       </TableCell>
-      <TableCell className="text-center py-4 pr-4 sm:pr-6">
-        <div className="inline-grid grid-cols-[88px_32px] items-center justify-center gap-1.5">
+      <TableCell className="text-center py-4 px-8 sm:px-10">
+        <div className="inline-flex items-center justify-center">
           {scheduled ? (
             <Button
               size="sm"
@@ -303,7 +394,6 @@ function SendMoneyRow({ tx, scheduled, onCancel }: { tx: SendMoneyTx; scheduled:
               )}
             </AnimatePresence>
           )}
-          <span className="h-8 w-8 shrink-0" aria-hidden="true" />
         </div>
       </TableCell>
     </TableRow>
@@ -333,7 +423,6 @@ function UnifiedRow({
   onInvoiceCancel,
   resendingInvoiceId,
 }: UnifiedRowProps) {
-  const badge = TYPE_BADGES[row.type];
   const req = row.moneyRequest;
   const invoice = row.invoice;
   // Ghost icon action for the money-request/invoice rows — the same compact
@@ -382,27 +471,21 @@ function UnifiedRow({
           <span className="w-5 h-5 rounded-full border border-blue-500 text-blue-600 flex items-center justify-center shrink-0">
             <ArrowDownLeft className="w-3 h-3" aria-hidden />
           </span>
-          <span className="tracking-tight">{row.ref}</span>
+          <OrderNoCell orderNo={row.ref} />
         </div>
-        <div className="text-xs font-bold text-gray-900 mt-0.5 sm:hidden pl-7">{row.amountLabel}</div>
+        <div className="text-xs font-bold text-gray-900 mt-0.5 sm:hidden pl-7 tabular-nums">{formatDashboardAmount(row.amountLabel)}</div>
       </TableCell>
       <TableCell className="text-slate-500 text-[13px] hidden sm:table-cell py-4">
-        <span>{row.dateLabel}</span>
+        <DateCellWithGmtTooltip dateLabel={row.dateLabel} timestampMs={row.dateSort} />
       </TableCell>
       <TableCell className="text-[13px] font-medium text-slate-700 py-4">
         <div>{row.name}</div>
-        {row.email ? <div className="text-xs text-slate-400 mt-0.5">{row.email}</div> : null}
-        <div className="mt-0.5 flex items-center gap-1.5 text-[10px] font-medium text-slate-400">
-          <span className={cn("w-1.5 h-1.5 rounded-full", badge.dot)} />
-          {badge.label}
-        </div>
       </TableCell>
       <TableCell className="text-slate-500 text-[13px] hidden md:table-cell py-4">
         <span>{row.service}</span>
       </TableCell>
       <TableCell className="text-slate-600 text-[13px] font-normal py-4 hidden sm:table-cell">
-        <span>{row.amountLabel}</span>
-        {row.subNote ? <div className="text-xs font-normal text-slate-400 mt-0.5">{row.subNote}</div> : null}
+        <span className="tabular-nums whitespace-nowrap">{formatDashboardAmount(row.amountLabel)}</span>
       </TableCell>
       <TableCell className="text-center py-4">
         <div className="flex items-center justify-center gap-2">
@@ -412,8 +495,8 @@ function UnifiedRow({
           </span>
         </div>
       </TableCell>
-      <TableCell className="text-center py-4 pr-4 sm:pr-6">
-        <div className="inline-grid grid-cols-[88px_32px] items-center justify-center gap-1.5">
+      <TableCell className="text-center py-4 px-8 sm:px-10">
+        <div className="relative inline-flex items-center justify-center">
           <Button
             size="sm"
             className="bg-blue-600 hover:bg-blue-700 text-white h-8 w-[88px] px-0 text-xs font-medium rounded-full shadow-2xs transition-all active:scale-95"
@@ -422,92 +505,92 @@ function UnifiedRow({
           >
             View
           </Button>
-          {(req && (moneyRequestAwaiting(req.status) || moneyRequestLinkShareable(req.status))) ||
-          (invoice && (invoiceActionable(invoice.status) || invoice.status === "expired")) ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0 rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900 data-[state=open]:bg-slate-100 data-[state=open]:text-slate-900 transition-colors cursor-pointer"
-                  aria-label={`More actions for ${row.ref}`}
-                  data-testid={`button-actions-more-${row.ref}`}
-                >
-                  <MoreHorizontal className="w-4 h-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48 rounded-xl p-1.5 shadow-lg border-slate-200/90">
-                {req && moneyRequestAwaiting(req.status) && (
-                  <DropdownMenuItem
-                    data-testid={`button-resend-${row.ref}`}
-                    onClick={() => onRequestResend(req)}
-                    className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-slate-700 cursor-pointer"
+          {((req && (moneyRequestAwaiting(req.status) || moneyRequestLinkShareable(req.status))) ||
+            (invoice && (invoiceActionable(invoice.status) || invoice.status === "expired"))) && (
+            <div className="absolute left-full ml-1.5 flex items-center">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900 data-[state=open]:bg-slate-100 data-[state=open]:text-slate-900 transition-colors cursor-pointer"
+                    aria-label={`More actions for ${row.ref}`}
+                    data-testid={`button-actions-more-${row.ref}`}
                   >
-                    <Mail className="w-4 h-4 text-slate-500" />
-                    <span>Resend email</span>
-                  </DropdownMenuItem>
-                )}
-                {req && moneyRequestLinkShareable(req.status) && (
-                  <DropdownMenuItem
-                    data-testid={`button-copy-link-${row.ref}`}
-                    onClick={() => onRequestCopyLink(req)}
-                    className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-slate-700 cursor-pointer"
-                  >
-                    <Copy className="w-4 h-4 text-slate-500" />
-                    <span>Copy payment link</span>
-                  </DropdownMenuItem>
-                )}
-                {req && moneyRequestAwaiting(req.status) && (
-                  <>
-                    <DropdownMenuSeparator className="my-1" />
+                    <MoreVertical className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48 rounded-xl p-1.5 shadow-lg border-slate-200/90">
+                  {req && moneyRequestAwaiting(req.status) && (
                     <DropdownMenuItem
-                      data-testid={`button-cancel-${row.ref}`}
-                      onClick={() => onRequestCancel(req)}
-                      className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-red-600 focus:bg-red-50 focus:text-red-700 cursor-pointer"
+                      data-testid={`button-resend-${row.ref}`}
+                      onClick={() => onRequestResend(req)}
+                      className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-slate-700 cursor-pointer"
                     >
-                      <XCircle className="w-4 h-4 text-red-600" />
-                      <span>Cancel request</span>
+                      <Mail className="w-4 h-4 text-slate-500" />
+                      <span>Resend email</span>
                     </DropdownMenuItem>
-                  </>
-                )}
-                {invoice && invoiceActionable(invoice.status) && (
-                  <DropdownMenuItem
-                    disabled={resendingInvoiceId === invoice.id}
-                    data-testid={`button-resend-${row.ref}`}
-                    onClick={() => onInvoiceResend(invoice)}
-                    className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-slate-700 cursor-pointer"
-                  >
-                    <Mail className="w-4 h-4 text-slate-500" />
-                    <span>Resend notification</span>
-                  </DropdownMenuItem>
-                )}
-                {invoice && invoiceActionable(invoice.status) && (
-                  <>
-                    <DropdownMenuSeparator className="my-1" />
+                  )}
+                  {req && moneyRequestLinkShareable(req.status) && (
                     <DropdownMenuItem
-                      data-testid={`button-cancel-${row.ref}`}
-                      onClick={() => onInvoiceCancel(invoice)}
-                      className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-red-600 focus:bg-red-50 focus:text-red-700 cursor-pointer"
+                      data-testid={`button-copy-link-${row.ref}`}
+                      onClick={() => onRequestCopyLink(req)}
+                      className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-slate-700 cursor-pointer"
                     >
-                      <XCircle className="w-4 h-4 text-red-600" />
-                      <span>Cancel invoice</span>
+                      <Copy className="w-4 h-4 text-slate-500" />
+                      <span>Copy payment link</span>
                     </DropdownMenuItem>
-                  </>
-                )}
-                {invoice?.status === "expired" && (
-                  <DropdownMenuItem
-                    data-testid={`button-create-new-${row.ref}`}
-                    onClick={() => onView("/send-invoice")}
-                    className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-blue-600 focus:bg-blue-50 focus:text-blue-700 cursor-pointer"
-                  >
-                    <FilePlus2 className="w-4 h-4 text-blue-600" />
-                    <span>Create New Invoice</span>
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <span className="h-8 w-8 shrink-0" aria-hidden="true" />
+                  )}
+                  {req && moneyRequestAwaiting(req.status) && (
+                    <>
+                      <DropdownMenuSeparator className="my-1" />
+                      <DropdownMenuItem
+                        data-testid={`button-cancel-${row.ref}`}
+                        onClick={() => onRequestCancel(req)}
+                        className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-red-600 focus:bg-red-50 focus:text-red-700 cursor-pointer"
+                      >
+                        <XCircle className="w-4 h-4 text-red-600" />
+                        <span>Cancel request</span>
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  {invoice && invoiceActionable(invoice.status) && (
+                    <DropdownMenuItem
+                      disabled={resendingInvoiceId === invoice.id}
+                      data-testid={`button-resend-${row.ref}`}
+                      onClick={() => onInvoiceResend(invoice)}
+                      className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-slate-700 cursor-pointer"
+                    >
+                      <Mail className="w-4 h-4 text-slate-500" />
+                      <span>Resend notification</span>
+                    </DropdownMenuItem>
+                  )}
+                  {invoice && invoiceActionable(invoice.status) && (
+                    <>
+                      <DropdownMenuSeparator className="my-1" />
+                      <DropdownMenuItem
+                        data-testid={`button-cancel-${row.ref}`}
+                        onClick={() => onInvoiceCancel(invoice)}
+                        className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-red-600 focus:bg-red-50 focus:text-red-700 cursor-pointer"
+                      >
+                        <XCircle className="w-4 h-4 text-red-600" />
+                        <span>Cancel invoice</span>
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  {invoice?.status === "expired" && (
+                    <DropdownMenuItem
+                      data-testid={`button-create-new-${row.ref}`}
+                      onClick={() => onView("/send-invoice")}
+                      className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-blue-600 focus:bg-blue-50 focus:text-blue-700 cursor-pointer"
+                    >
+                      <FilePlus2 className="w-4 h-4 text-blue-600" />
+                      <span>Create New Invoice</span>
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           )}
         </div>
       </TableCell>
@@ -811,7 +894,8 @@ export default function Dashboard() {
   const searchParams = useSearch();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { isLoading: isAuthLoading } = useAuth();
+  const { demoUser, isLoading: isAuthLoading } = useAuth();
+  const activeUser = user ?? demoUser;
   // Referral & Bonus — live offer, wallet and referrals from the rewards API
   const rewards = useRewards();
   const rewardsCurrency = rewards.data?.currency ?? "GBP";
@@ -946,7 +1030,12 @@ export default function Dashboard() {
         };
       }),
       ...(isDemoUser
-        ? scheduledTransactions.map((tx) => ({ kind: "send_money" as const, scheduled: true, dateSort: Date.parse(tx.date) || 0, tx }))
+        ? scheduledTransactions.map((tx) => ({
+            kind: "send_money" as const,
+            scheduled: true,
+            dateSort: Date.parse(`${tx.date} 00:00:00 GMT`) || 0,
+            tx,
+          }))
         : []),
     ];
     const moneyInRows: MergedRow[] = [
@@ -1146,9 +1235,9 @@ export default function Dashboard() {
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 md:gap-4 flex-1 min-w-0">
             <motion.h1
               variants={itemVariants}
-              className="shrink-0 text-2xl font-semibold tracking-tight text-[#323130] md:text-[28px]"
+              className="shrink-0 text-2xl font-normal tracking-tight text-[#323130] md:text-[28px]"
             >
-              <span data-testid="dashboard-welcome">Welcome{welcomeName(user) ? ` ${welcomeName(user)}` : ""}</span>
+              <span data-testid="dashboard-welcome">Welcome{welcomeName(activeUser) ? <> <span className="font-bold">{welcomeName(activeUser)}</span></> : ""}</span>
             </motion.h1>
 
             {false && bonusBalance.available > 0 && (
@@ -1180,7 +1269,7 @@ export default function Dashboard() {
         {/* Account Summary Section — 3 Pastel Cards matching Rhemito Reference Palette */}
         <motion.div variants={itemVariants} data-testid="section-account-summary">
           <h2 className="text-xl font-bold text-[#323130] tracking-tight mb-3">
-            Account Summary
+            Account summary
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Total Sent Card */}
@@ -1218,7 +1307,7 @@ export default function Dashboard() {
               className="rounded-xl bg-[#E5F1FE] px-5 py-4 flex flex-col justify-between min-h-[82px] cursor-pointer transition-shadow hover:shadow-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2e5bff]"
             >
               <span className="text-xs font-normal text-[#605E5C]">
-                Wallet Balance
+                Wallet balance
               </span>
               <div className="flex items-center justify-between gap-2 mt-2">
                 <span data-testid="summary-wallet-balance" className="text-xl font-bold text-[#605E5C] tracking-tight whitespace-nowrap tabular-nums">
@@ -1240,7 +1329,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Collection Account Card */}
+            {/* Payment Account Card */}
             <div
               role="button"
               tabIndex={0}
@@ -1255,7 +1344,7 @@ export default function Dashboard() {
               className="rounded-xl bg-[#E0EED6] px-5 py-4 flex flex-col justify-between min-h-[82px] cursor-pointer transition-shadow hover:shadow-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2e5bff]"
             >
               <span className="text-xs font-normal text-[#605E5C]">
-                Collection Account
+                Payment account
               </span>
               <div className="flex items-center justify-between gap-2 mt-2">
                 <span data-testid="summary-collection-account" className="text-xl font-bold text-[#605E5C] tracking-tight whitespace-nowrap tabular-nums">
@@ -1294,7 +1383,7 @@ export default function Dashboard() {
                   data-testid="button-send-money"
                   className="h-10 min-w-[150px] px-6 rounded-full bg-[#2e5bff] hover:bg-blue-700 text-white text-sm sm:text-base font-semibold transition-all active:scale-95 cursor-pointer"
                 >
-                  Send Money
+                  Send money
                 </button>
                 <button
                   type="button"
@@ -1302,7 +1391,7 @@ export default function Dashboard() {
                   data-testid="button-request-payment"
                   className="h-10 min-w-[150px] px-6 rounded-full border border-[#2e5bff] bg-white hover:bg-blue-50 text-[#2e5bff] text-sm sm:text-base font-semibold transition-all active:scale-95 cursor-pointer"
                 >
-                  Receive Money
+                  Receive money
                 </button>
                 <button
                   type="button"
@@ -1310,7 +1399,7 @@ export default function Dashboard() {
                   data-testid="button-bonus-discounts"
                   className="h-10 min-w-[150px] px-6 rounded-full border border-[#2e5bff] bg-white hover:bg-blue-50 text-[#2e5bff] text-sm sm:text-base font-semibold transition-all active:scale-95 cursor-pointer"
                 >
-                  Reward
+                  Reward$
                 </button>
                 <button
                   type="button"
@@ -1318,7 +1407,7 @@ export default function Dashboard() {
                   data-testid="button-send-invoice"
                   className="h-10 min-w-[150px] px-6 rounded-full border border-[#2e5bff] bg-white hover:bg-blue-50 text-[#2e5bff] text-sm sm:text-base font-semibold transition-all active:scale-95 cursor-pointer"
                 >
-                  Send Invoice
+                  Send invoice
                 </button>
                 <button
                   type="button"
@@ -1326,7 +1415,7 @@ export default function Dashboard() {
                   data-testid="button-funding-campaigns"
                   className="h-10 min-w-[150px] px-6 rounded-full border border-[#2e5bff] bg-white hover:bg-blue-50 text-[#2e5bff] text-sm sm:text-base font-semibold transition-all active:scale-95 cursor-pointer"
                 >
-                  Fund Campaigns
+                  Fund campaigns
                 </button>
               </div>
             </CardContent>
@@ -1603,67 +1692,29 @@ export default function Dashboard() {
                               Expires {formatUkDate(soonestAny.expires_on)}
                             </span>
                           ) : null}
-                          {referralAvailable > 0 && schemeAvailable > 0 && (
-                            <span className="text-[11px] text-[#605e5c] whitespace-nowrap">
-                              · Soonest-expiring used first
-                            </span>
-                          )}
                         </div>
                       </div>
 
-                      {/* Zone B — How to redeem it + 1-click CTAs */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between xl:justify-end gap-3 xl:pl-4 xl:border-l xl:border-slate-100">
-                        <div
-                          data-testid="dashboard-bonus-redemption-modes"
-                          className="space-y-1 max-w-md"
-                        >
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="inline-flex items-center gap-1 rounded-lg border border-[#87c2fc]/60 bg-[#ecf5ff] px-2.5 py-1 text-xs text-[#323130]">
-                              <ArrowDownLeft
-                                className="h-3.5 w-3.5 text-[#2e5bff] shrink-0"
-                                aria-hidden="true"
-                              />
-                              <span>
-                                <strong className="font-semibold text-[#2e5bff]">Pay less:</strong>{" "}
-                                Deduct {activeAmountText} off what you pay on Step 1
-                              </span>
-                            </span>
-                            <span className="inline-flex items-center gap-1 rounded-lg border border-teal-200/80 bg-teal-50/70 px-2.5 py-1 text-xs text-[#323130]">
-                              <ArrowUpRight
-                                className="h-3.5 w-3.5 text-teal-700 shrink-0"
-                                aria-hidden="true"
-                              />
-                              <span>
-                                <strong className="font-semibold text-teal-800">Send more:</strong>{" "}
-                                Add +{activeAmountText} extra to recipient payout at no extra cost
-                              </span>
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-[#605e5c]">
-                            Pick on Step 1 of Send Money (used separately from Promo Codes).
-                          </p>
-                        </div>
-
-                        <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-1.5 shrink-0">
-                          {!rewards.data?.wallet.bonus_blocked && (
-                            <Button
-                              type="button"
-                              data-testid="dashboard-redeem-send-money-cta"
-                              onClick={() => handleRedeemOnSendMoney()}
-                              className="h-9 rounded-full bg-[#2e5bff] hover:bg-blue-700 px-4 text-xs sm:text-[13px] font-semibold text-white shadow-none cursor-pointer"
-                            >
-                              <span>Redeem on Send Money</span>
-                              <ArrowRight className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
-                            </Button>
-                          )}
-                          <button
+                      {/* Zone B — 1-click CTAs */}
+                      <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-1.5 shrink-0">
+                        {!rewards.data?.wallet.bonus_blocked && (
+                          <Button
                             type="button"
-                            onClick={() => setLocation("/bonus-discounts")}
-                            className="inline-flex items-center gap-1 text-xs font-semibold text-[#2e5bff] hover:text-blue-700 hover:underline cursor-pointer"
+                            data-testid="dashboard-redeem-send-money-cta"
+                            onClick={() => handleRedeemOnSendMoney()}
+                            className="h-9 rounded-full bg-[#2e5bff] hover:bg-blue-700 px-4 text-xs sm:text-[13px] font-semibold text-white shadow-none cursor-pointer"
                           >
-                            <span>Details in Reward$</span>
-                          </button>
-                        </div>
+                            <span>Redeem on send money</span>
+                            <ArrowRight className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                          </Button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setLocation("/bonus-discounts")}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-[#2e5bff] hover:text-blue-700 hover:underline cursor-pointer"
+                        >
+                          <span>Details in Reward$</span>
+                        </button>
                       </div>
                     </div>
                   </Card>
@@ -1692,48 +1743,22 @@ export default function Dashboard() {
           ref={transactionsSectionRef}
           data-testid="section-transactions"
         >
-          <Card className="rounded-2xl border border-[#efefee] bg-white shadow-[-2px_4px_16px_0px_rgba(0,0,0,0.04)] overflow-hidden">
+          <Card className="@container rounded-2xl border border-[#efefee] bg-white shadow-[-2px_4px_16px_0px_rgba(0,0,0,0.04)] overflow-hidden">
             <CardContent className="p-0">
               <div>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 md:px-6 pt-5 pb-3">
+                <div className="flex items-center justify-between gap-3 px-5 md:px-6 pt-5 pb-3">
                   <div className="flex items-center gap-2.5">
                     <h2 className="font-display font-bold text-base md:text-lg text-[#605e5c] tracking-tight">
-                      Recent Transactions
+                      Recent transactions
                     </h2>
                   </div>
                   <div className="flex items-center gap-3">
-                    <div className="relative w-full sm:w-72">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                      <Input
-                        value={search}
-                        onChange={(e) => {
-                          setSearch(e.target.value);
-                          setPage(1);
-                        }}
-                        placeholder="Search by ref, name, email or service…"
-                        className="pl-9 pr-8 h-8 text-xs rounded-full bg-slate-50/70 border-slate-200 shadow-none focus-visible:ring-blue-500"
-                        data-testid="input-search-transactions"
-                      />
-                      {search && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSearch("");
-                            setPage(1);
-                          }}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-md"
-                          aria-label="Clear search"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
                     <button
                       type="button"
                       onClick={() => setLocation("/transactions")}
-                      className="text-xs font-semibold text-slate-500 hover:text-blue-600 shrink-0 transition-colors cursor-pointer"
+                      className="text-xs font-bold text-slate-500 hover:text-blue-600 shrink-0 transition-colors cursor-pointer"
                     >
-                      See All
+                      See all
                     </button>
                   </div>
                 </div>
@@ -1837,17 +1862,17 @@ export default function Dashboard() {
                     <Table>
                       <TableHeader>
                         <TableRow className="hover:bg-transparent border-b border-slate-100">
-                          <TableHead className="text-xs font-bold text-[#323130] py-3.5 pl-4 sm:pl-6">
-                            Order No
+                          <TableHead className="text-xs font-bold text-[#323130] whitespace-nowrap py-3.5 pl-4 sm:pl-6">
+                            Order no
                           </TableHead>
                           <TableHead className="text-xs font-bold text-[#323130] hidden sm:table-cell py-3.5">
-                            Date / Time GMT
+                            Date
                           </TableHead>
                           <TableHead className="text-xs font-bold text-[#323130] py-3.5">
                             Name
                           </TableHead>
                           <TableHead className="text-xs font-bold text-[#323130] hidden md:table-cell py-3.5">
-                            Service Type
+                            Service
                           </TableHead>
                           <TableHead className="text-xs font-bold text-[#323130] py-3.5 hidden sm:table-cell">
                             Amount
@@ -1855,7 +1880,7 @@ export default function Dashboard() {
                           <TableHead className="text-xs font-bold text-[#323130] text-center py-3.5">
                             Status
                           </TableHead>
-                          <TableHead className="text-xs font-bold text-[#323130] text-center py-3.5 pr-4 sm:pr-6">
+                          <TableHead className="text-xs font-bold text-[#323130] text-center py-3.5 px-8 sm:px-10">
                             Actions
                           </TableHead>
                         </TableRow>
@@ -1898,6 +1923,7 @@ export default function Dashboard() {
                               <SendMoneyRow
                                 key={row.tx.id}
                                 tx={row.tx}
+                                dateSort={row.dateSort}
                                 scheduled={row.scheduled}
                                 onCancel={handleCancelClick}
                               />

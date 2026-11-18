@@ -434,7 +434,7 @@ export function ExistingUserReferralCard({
                     2. Member Bonus Schemes · Automatic Rewards
                   </span>
                   <h3 className="font-display text-[15px] sm:text-[16px] font-bold text-slate-900">
-                    Loyalty, Transfer Threshold &amp; Request Money Bonuses
+                    Loyalty, transfer threshold &amp; request money bonuses
                   </h3>
                 </div>
               </div>

@@ -208,6 +208,14 @@ export async function addPayoutAccount(input: {
   return json.data;
 }
 
+export async function deletePayoutAccount(id: string): Promise<void> {
+  await apiRequest("DELETE", `/api/request-money/payout-accounts/${encodeURIComponent(id)}`);
+}
+
+export async function setDefaultPayoutAccount(id: string): Promise<void> {
+  await apiRequest("PATCH", `/api/request-money/payout-accounts/${encodeURIComponent(id)}/default`);
+}
+
 /** Development-only hook that completes the stub bank verification. */
 export async function devVerifyPayoutAccount(id: string): Promise<void> {
   await apiRequest("POST", `/api/dev/payout-accounts/${id}/verify`, {});

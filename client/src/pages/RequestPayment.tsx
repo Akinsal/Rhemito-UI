@@ -147,7 +147,7 @@ function FieldTag({ required }: { required?: boolean }) {
 // Country dialing codes come from @/data/dialing-codes (full ISO list).
 
 const steps = [
-  { id: 1, title: "Amount & Currencies", description: "Set amount & payout destination" },
+  { id: 1, title: "Amount & currencies", description: "Set amount & payout destination" },
   { id: 2, title: "Payment request", description: "Add optional details and share your link" },
 ];
 
@@ -911,7 +911,7 @@ export default function RequestPayment() {
       <DashboardLayout>
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="max-w-3xl mx-auto pb-24">
           <div className="mb-4 md:mb-6">
-            <h1 className="text-xl md:text-2xl font-bold font-display text-slate-900">Receive Money</h1>
+            <h1 className="text-xl md:text-2xl font-bold font-display text-slate-900">Receive money</h1>
             <p className="text-muted-foreground text-sm mt-0.5">
               Your request is ready. Copy the link into any messaging app, or send it by email.
             </p>
@@ -1043,7 +1043,7 @@ export default function RequestPayment() {
             <ArrowLeft className="w-4 h-4 mr-1 md:mr-2" />
             Back
           </Button>
-          <h1 className="text-xl md:text-2xl font-bold font-display text-slate-900">Receive Money</h1>
+          <h1 className="text-xl md:text-2xl font-bold font-display text-slate-900">Receive money</h1>
           <p className="text-muted-foreground text-sm mt-0.5">
             Set up a request to receive money from friends, family or for an invoice, paid straight to your verified bank account.
           </p>
@@ -1210,7 +1210,7 @@ export default function RequestPayment() {
                         >
                           <div className="bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-between border-b pb-3">
-                              <h3 className="text-base font-bold text-gray-900">Insert Promo Code</h3>
+                              <h3 className="text-base font-bold text-gray-900">Insert promo code</h3>
                               <button type="button" onClick={() => setShowPromoModal(false)} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg" aria-label="Close promo code modal">
                                 <X className="w-4 h-4" />
                               </button>
@@ -1299,7 +1299,7 @@ export default function RequestPayment() {
                     <div className="lg:col-span-2 lg:self-start lg:sticky lg:top-24">
                       <Card className="border-2 border-gray-200 shadow-sm" data-testid="fee-breakdown">
                         <CardHeader className="pb-4 bg-gray-50/50 border-b">
-                          <CardTitle className="text-base">Amount Summary</CardTitle>
+                          <CardTitle className="text-base">Amount summary</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-3 text-sm pt-4">
                           {promoApplied && promoBonus > 0 && (
@@ -1753,7 +1753,7 @@ export default function RequestPayment() {
                     <div className="lg:col-span-2 lg:self-start lg:sticky lg:top-24">
                       <Card className="border-2 border-gray-200 shadow-sm" data-testid="request-breakdown">
                         <CardHeader className="pb-4 bg-gray-50/50 border-b">
-                          <CardTitle className="text-base">Amount Summary</CardTitle>
+                          <CardTitle className="text-base">Amount summary</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-3 text-sm pt-4">
                           {promoApplied && promoBonus > 0 && (
@@ -1885,7 +1885,7 @@ export default function RequestPayment() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-lg text-slate-900">
               <ArrowRightLeft className="w-5 h-5 text-primary" />
-              <span>FX Conversion Notice</span>
+              <span>FX conversion notice</span>
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">Cross-currency payout information</DialogDescription>
           </DialogHeader>

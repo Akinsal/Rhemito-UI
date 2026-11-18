@@ -16,21 +16,21 @@ import { NotificationPanelContent } from "./NotificationPanel";
 function NotificationBadge({ count }: { count: number }): React.JSX.Element | null {
   if (count === 0) return null;
 
-  const label = count > 9 ? "9+" : String(count);
+  const label = count > 99 ? "99+" : String(count);
 
   return (
     <motion.span
-      key={count > 9 ? "9+" : count}
+      key={count > 99 ? "99+" : count}
       initial={{ scale: 0.6, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
       exit={{ scale: 0.6, opacity: 0 }}
       transition={{ type: "spring", stiffness: 500, damping: 20 }}
       className={cn(
-        "absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1",
-        "bg-destructive text-destructive-foreground",
-        "ring-2 ring-white dark:ring-card",
-        "rounded-full text-[10px] font-bold leading-none",
-        "flex items-center justify-center pointer-events-none"
+        "absolute -top-2 -right-2.5 min-w-[22px] h-[19px] px-1.5",
+        "bg-[#e04343] text-white",
+        "ring-2 ring-white",
+        "rounded-full text-[11px] font-bold leading-none",
+        "flex items-center justify-center shadow-xs pointer-events-none"
       )}
       aria-hidden="true"
     >
@@ -48,7 +48,7 @@ function BellIcon({
 }): React.JSX.Element {
   return (
     <>
-      <Bell className="w-4 h-4 md:w-5 md:h-5" />
+      <Bell className="w-[18px] h-[18px] fill-white text-white" strokeWidth={1.75} />
       <AnimatePresence>
         {unreadCount > 0 && <NotificationBadge count={unreadCount} />}
       </AnimatePresence>
@@ -83,10 +83,8 @@ export function NotificationBell(): React.JSX.Element {
   const isMobile = useIsMobile();
 
   const buttonClass = cn(
-    "relative p-2 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center",
-    isOpen
-      ? "bg-primary/10 text-primary"
-      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+    "relative w-9 h-9 rounded-[10px] bg-[#3682df] hover:bg-[#2b72cc] text-white flex items-center justify-center transition-colors shadow-2xs cursor-pointer",
+    isOpen && "bg-[#2b72cc]"
   );
 
   // Render only ONE variant — prevents the drawer Portal from leaking into desktop

@@ -89,7 +89,7 @@ export default function BankTransferDesigns() {
       {/* Send Money Title & Step 4 of 4 */}
       <div className="flex items-center justify-between">
         <h2 className={`${isMobile ? "text-xl" : "text-2xl"} font-bold text-slate-900 tracking-tight`}>
-          Send Money
+          Send money
         </h2>
         <span className="text-xs sm:text-sm font-medium text-slate-500">Step 4 of 4</span>
       </div>
@@ -807,7 +807,7 @@ export default function BankTransferDesigns() {
             </div>
             <div>
               <h1 className="text-sm font-bold text-slate-900">
-                Rhemito — Bank Transfer Design Proposals
+                Rhemito — Bank transfer design proposals
               </h1>
               <p className="text-xs text-slate-500">
                 3 Concepts × Web &amp; Mobile (01/06 – 06/06)

@@ -6,11 +6,22 @@ import { test, expect } from '@playwright/test';
 const RECIPIENTS_URL = '/senders-recipients?tab=recipients';
 
 test.describe('Recipients page', () => {
+    // Isolate from live Mito Staging beneficiaries: use the local (unconfigured) recipient fallback
+    test.beforeEach(async ({ page }) => {
+        await page.route('**/api/send-money/mito/beneficiaries*', (route) => {
+            if (route.request().method() !== 'GET') return route.fallback();
+            return route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({ data: { configured: false, beneficiaries: [] } }),
+            });
+        });
+    });
 
     test('Sidebar Senders & Recipients link opens the consolidated page and shows recipients under its tab', async ({ page }) => {
         await page.goto('/');
 
-        await page.getByTestId('link-senders-&-recipients').click();
+        await page.getByTestId('link-recipients').click();
 
         await expect(page).toHaveURL(/\/senders-recipients$/);
         // Senders is the default tab; switching shows the recipients table
@@ -104,6 +115,10 @@ test.describe('Recipients page', () => {
         await page.getByRole('option', { name: /Nigeria$/ }).click();
         await expect(page.getByText('Narration is mandatory for Nigerian beneficiaries.')).toBeVisible();
 
+        // Service type is mandatory (choosing it resets the bank field, so pick it before the bank details)
+        await page.getByTestId('select-new-service-type').click();
+        await page.getByRole('option', { name: 'Bank Deposit', exact: true }).click();
+
         // Submit stays disabled until the mandatory narration is provided
         await page.getByTestId('input-new-bank-name').fill('GTBank');
         await page.getByTestId('input-new-account-number').fill('0987654321');
@@ -117,7 +132,7 @@ test.describe('Recipients page', () => {
         // Newest recipient appears first (default sort: newest on top)
         const firstRow = page.locator('[data-testid^="row-recipient-"]').first();
         await expect(firstRow).toContainText('Test Recipient');
-        await expect(page.getByText('Recipient added', { exact: true })).toBeVisible();
+        await expect(page.getByText('Beneficiary created successfully', { exact: true })).toBeVisible();
     });
 
     test('Consolidates sender and recipient by email as a single record with dual-role badge', async ({ page }) => {

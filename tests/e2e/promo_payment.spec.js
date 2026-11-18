@@ -5,6 +5,42 @@ import { test, expect } from '@playwright/test';
  * The page must not check the code again after that (it would be "already used" by this very payment).
  */
 test.describe('Send Money — promo code and payment method', () => {
+    // Isolate from live Mito Staging beneficiaries: serve one fully-populated saved beneficiary (same shape as staging_payment_gateway.spec.js)
+    test.beforeEach(async ({ page }) => {
+        await page.route('**/api/send-money/mito/beneficiaries*', (route) => {
+            if (route.request().method() !== 'GET') return route.fallback();
+            return route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({
+                    data: {
+                        configured: true,
+                        beneficiaries: [{
+                            beneficiaryId: '11111111-2222-3333-4444-555555555555',
+                            name: 'Akshita',
+                            firstName: 'Akshita',
+                            lastName: 'Sharma',
+                            legalEntityType: 'individual',
+                            providerId: 'e3af932a-0326-4b65-b5f4-e8f753a69d4d',
+                            bankName: 'United Bank for Africa Plc (UBA)',
+                            acctNumber: '1018316888',
+                            relationship: 'FRIEND',
+                            reason: 'FOROWNEXPENDITURES',
+                            narration: 'Family allowance',
+                            address: '12 Marina Road',
+                            city: 'Lagos',
+                            postcode: '100001',
+                            stateOrProvince: 'Lagos',
+                            mobileNo: '08031234567',
+                            currency: 'NGN',
+                            country: 'Nigeria',
+                            countryIso3: 'NGA',
+                        }],
+                    },
+                }),
+            });
+        });
+    });
     test('choosing a payment method does not re-validate the code against its own use', async ({ page }) => {
         let used = false;
         let validations = 0;
@@ -30,7 +66,7 @@ test.describe('Send Money — promo code and payment method', () => {
 
         await page.getByRole('button', { name: 'Continue' }).click();
         await page.getByText('Akshita', { exact: true }).first().click();
-        await expect(page.getByText('Recipient Details')).toBeVisible();
+        await expect(page.getByText('Recipient Details').first()).toBeVisible();
         await page.getByRole('button', { name: 'Continue' }).click();
         await page.waitForTimeout(500);
         const before = validations;

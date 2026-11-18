@@ -510,8 +510,8 @@ describe("Dashboard Earned Bonus & Quick Redeem card and Send Money deep-link", 
   };
 
   rule("BONUS-18", "Dashboard surfaces the Earned Bonus & Quick Redeem card when bonus > 0, a dismissible referee strip when 0-balance & referred, and nothing for 0-balance unreferred users", {
-    why: "Referees and bonus holders must immediately see their earned credit, inviter attribution, guardrails, Pay less / Send more modes, and a 1-click Send Money CTA — without cluttering zero-balance dashboards.",
-    fix: "client/src/pages/Dashboard.tsx: render rewards-section-bonus-banners only when displayBonusBalances.length > 0, render referee-linked-info-strip when 0-balance & referredBy is present, and deep-link Redeem on Send Money to /send-money?reward=...",
+    why: "Referees and bonus holders must immediately see their earned credit, inviter attribution, guardrails, and a 1-click Send Money CTA — without cluttering zero-balance dashboards or repeating Step 1 redemption-mode pills on Overview (DEC-2026-11-18-REMOVE-OVERVIEW-REDEMPTION-MODE-PILLS).",
+    fix: "client/src/pages/Dashboard.tsx: render rewards-section-bonus-banners only when displayBonusBalances.length > 0 (without dashboard-bonus-redemption-modes per PD-05 approval on 2026-11-18), render referee-linked-info-strip when 0-balance & referredBy is present, and deep-link 'Redeem on send money' to /send-money?reward=...",
     where: ["client/src/pages/Dashboard.tsx"],
   }, () => {
     // 1. Zero-balance unreferred user -> neither bonus card nor referee strip renders
@@ -598,9 +598,7 @@ describe("Dashboard Earned Bonus & Quick Redeem card and Send Money deep-link", 
       expect(card.textContent).toContain("Min. transfer £50.00");
       expect(card.textContent).toContain("GBP → All corridors");
       expect(card.textContent).toContain("Expires 11/02/2027");
-      const modes = r2.view.getByTestId("dashboard-bonus-redemption-modes");
-      expect(modes.textContent).toContain("Pay less");
-      expect(modes.textContent).toContain("Send more");
+      expect(r2.view.queryByTestId("dashboard-bonus-redemption-modes")).toBeNull();
 
       fireEvent.click(r2.view.getByTestId("dashboard-redeem-send-money-cta"));
       expect(window.location.pathname + window.location.search).toBe("/send-money?reward=referral");

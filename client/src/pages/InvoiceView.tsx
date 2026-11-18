@@ -366,7 +366,7 @@ export default function InvoiceView() {
       <Shell>
         <StatusCard
           icon={<XCircle className="w-8 h-8 text-red-600" />}
-          title="Invoice Cancelled"
+          title="Invoice cancelled"
           testId="cancelled-invoice-card"
         >
           <p className="text-sm text-slate-700" data-testid="text-cancelled">
@@ -391,7 +391,7 @@ export default function InvoiceView() {
       <Shell>
         <StatusCard
           icon={<Clock className="w-8 h-8 text-slate-600" />}
-          title="Payment Link Expired"
+          title="Payment link expired"
           testId="expired-invoice-card"
         >
           <p className="text-sm text-slate-700" data-testid="text-expired">
@@ -430,7 +430,7 @@ export default function InvoiceView() {
       <Shell>
         <StatusCard
           icon={<Loader2 className="w-8 h-8 animate-spin text-purple-600" />}
-          title="Payment Processing"
+          title="Payment processing"
           testId="processing-card"
         >
           <p className="text-sm text-slate-700" data-testid="text-processing">
@@ -1072,7 +1072,7 @@ function PaidCard({ invoiceNumber, alreadyPaid }: { invoiceNumber: string; alrea
   return (
     <StatusCard
       icon={<CheckCircle2 className="w-8 h-8 text-emerald-600" />}
-      title="Payment Complete"
+      title="Payment complete"
       testId="paid-card"
     >
       <p className="text-sm text-slate-700" data-testid="text-paid">
@@ -1087,7 +1087,7 @@ function PaidCard({ invoiceNumber, alreadyPaid }: { invoiceNumber: string; alrea
 
 function InvalidLinkCard() {
   return (
-    <StatusCard icon={<Lock className="w-8 h-8 text-slate-600" />} title="Payment Link Not Valid" testId="invalid-link-card">
+    <StatusCard icon={<Lock className="w-8 h-8 text-slate-600" />} title="Payment link not valid" testId="invalid-link-card">
       <p className="text-sm text-slate-700">
         This invoice payment link does not exist or is no longer valid. Please check the link you received or
         contact the invoice sender.

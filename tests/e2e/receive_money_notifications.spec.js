@@ -11,8 +11,8 @@ test.describe('Receive Money Notifications', () => {
         // Click bell button to open notification panel
         await bellButton.click();
 
-        // Check panel heading
-        await expect(page.getByText('Notifications', { exact: true })).toBeVisible({ timeout: 5000 });
+        // Check panel heading (the sidebar also has a Notifications link, so take the popover's, which is last in the DOM)
+        await expect(page.getByText('Notifications', { exact: true }).last()).toBeVisible({ timeout: 5000 });
 
         // Verify Receive Money notifications are present
         await expect(page.getByText('Money Request Paid').first()).toBeVisible();

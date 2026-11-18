@@ -453,12 +453,12 @@ export default function Invoices() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Invoice No.</TableHead>
+                      <TableHead>Invoice no.</TableHead>
                       <TableHead>Client</TableHead>
                       <TableHead className="hidden md:table-cell">Source</TableHead>
                       <TableHead className="text-right">Amount</TableHead>
                       <TableHead className="hidden sm:table-cell">Sent</TableHead>
-                      <TableHead className="hidden lg:table-cell">Due Date</TableHead>
+                      <TableHead className="hidden lg:table-cell">Due date</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>

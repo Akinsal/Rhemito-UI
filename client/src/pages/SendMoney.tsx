@@ -2921,7 +2921,7 @@ export default function SendMoney() {
             <div className="max-w-5xl mx-auto pb-10">
                 {/* Header */}
                 <div className="mb-4 flex items-center justify-between">
-                    <h1 className="text-xl font-semibold text-[#323130]">Send Money</h1>
+                    <h1 className="text-xl font-semibold text-[#323130]">Send money</h1>
                     <div className="text-sm text-[#605e5c]">Step {currentStep} of {steps.length}</div>
                 </div>
 
@@ -3424,7 +3424,7 @@ export default function SendMoney() {
                                     <div className="sticky top-6">
                                         <Card className="rounded-xl border border-[#efefee] bg-white shadow-[-2px_4px_16px_0px_rgba(0,0,0,0.04)]">
                                             <CardHeader className="pb-4 bg-white border-b border-[#efefee]">
-                                                <CardTitle className="text-base font-semibold text-[#323130]">Amount Summary</CardTitle>
+                                                <CardTitle className="text-base font-semibold text-[#323130]">Amount summary</CardTitle>
                                             </CardHeader>
                                             <CardContent className="space-y-3 text-sm pt-4">
                                                 {promoApplied && promoDiscount > 0 && (
@@ -3529,7 +3529,7 @@ export default function SendMoney() {
                                     onClick={(e) => e.stopPropagation()}
                                 >
                                     <div className="flex items-center justify-between border-b pb-3">
-                                        <h3 className="text-base font-bold text-gray-900">Insert Promo Code</h3>
+                                        <h3 className="text-base font-bold text-gray-900">Insert promo code</h3>
                                         <button
                                             type="button"
                                             onClick={() => setShowPromoModal(false)}
@@ -3770,7 +3770,7 @@ export default function SendMoney() {
                                         <Card className="rounded-xl border border-[#efefee] bg-white shadow-[-2px_4px_16px_0px_rgba(0,0,0,0.04)]">
                                             <CardHeader className="pb-4 bg-white border-b border-[#efefee]">
                                                 <div className="flex justify-between items-center">
-                                                    <CardTitle className="text-base font-semibold text-[#323130]">Amount Summary</CardTitle>
+                                                    <CardTitle className="text-base font-semibold text-[#323130]">Amount summary</CardTitle>
                                                     {/* Session Timer */}
                                                     <div className={`flex gap-1 font-mono text-sm px-2 py-1 rounded ${sessionTimeLeft <= 60 ? 'text-red-600 bg-red-50 animate-pulse' : 'text-blue-600 bg-blue-50'}`}>
                                                         <span>{timerDisplay.minutes}</span>:<span>{timerDisplay.seconds}</span>
@@ -3900,7 +3900,7 @@ export default function SendMoney() {
                                     )}
                                     <Card>
                                         <CardHeader>
-                                            <CardTitle className="text-base">Recipient Details</CardTitle>
+                                            <CardTitle className="text-base">Recipient details</CardTitle>
                                         </CardHeader>
                                         <CardContent className="space-y-4">
                                             <AccountTypeToggle
@@ -4241,7 +4241,7 @@ export default function SendMoney() {
                                     <Card>
                                         <CardHeader>
                                             <CardTitle className="text-base">
-                                                {deliveryMethod === "mobile_money" ? "Mobile Operator Details" : "Banking Details"}
+                                                {deliveryMethod === "mobile_money" ? "Mobile operator details" : "Banking details"}
                                             </CardTitle>
                                         </CardHeader>
                                         <CardContent className="space-y-4">
@@ -4587,7 +4587,7 @@ export default function SendMoney() {
                                         <Card className="rounded-xl border border-[#efefee] bg-white shadow-[-2px_4px_16px_0px_rgba(0,0,0,0.04)]">
                                             <CardHeader className="pb-4 bg-white border-b border-[#efefee]">
                                                 <div className="flex justify-between items-center">
-                                                    <CardTitle className="text-base font-semibold text-[#323130]">Amount Summary</CardTitle>
+                                                    <CardTitle className="text-base font-semibold text-[#323130]">Amount summary</CardTitle>
                                                     {/* Session Timer */}
                                                     <div className={`flex gap-1 font-mono text-sm px-2 py-1 rounded ${sessionTimeLeft <= 60 ? 'text-red-600 bg-red-50 animate-pulse' : 'text-blue-600 bg-blue-50'}`}>
                                                         <span>{timerDisplay.minutes}</span>:<span>{timerDisplay.seconds}</span>
@@ -4757,7 +4757,7 @@ export default function SendMoney() {
                                             <CardContent className="p-4 sm:p-5 space-y-3.5">
                                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                                     <div className="space-y-0.5">
-                                                        <h3 className="text-sm font-semibold text-gray-900">Rewards &amp; Discounts</h3>
+                                                        <h3 className="text-sm font-semibold text-gray-900">Rewards &amp; discounts</h3>
                                                         {promoApplied || useBonus ? (
                                                             <p className="text-[11px] font-medium text-slate-500" data-testid="step4-one-reward-note">
                                                                 You can only use one reward at a time.
@@ -4994,14 +4994,14 @@ export default function SendMoney() {
                                                         <div className="space-y-2 flex-1">
                                                             <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
                                                                 {paymentOutcome.category === "completed"
-                                                                    ? "Payment Successful — Transaction in Progress"
+                                                                    ? "Payment successful — Transaction in progress"
                                                                     : paymentOutcome.category === "processing"
-                                                                    ? "Payment Authorized — Finalizing Verification"
+                                                                    ? "Payment authorized — Finalizing verification"
                                                                     : paymentOutcome.category === "failed"
-                                                                    ? "Payment Could Not Be Completed"
+                                                                    ? "Payment could not be completed"
                                                                     : paymentOutcome.category === "cancelled"
-                                                                    ? "Payment Authorization Was Cancelled"
-                                                                    : "Payment Security Session Timed Out"}
+                                                                    ? "Payment authorization was cancelled"
+                                                                    : "Payment security session timed out"}
                                                             </h2>
                                                             <p className="text-sm sm:text-base text-white/90 leading-relaxed max-w-2xl">
                                                                 {paymentOutcome.category === "completed"
@@ -5543,7 +5543,7 @@ export default function SendMoney() {
                                     <Card>
                                         <CardHeader>
                                             <CardTitle className="text-base">
-                                                {mitoCardPaymentSession ? "Card Details" : "How would you like to pay?"}
+                                                {mitoCardPaymentSession ? "Card details" : "How would you like to pay?"}
                                             </CardTitle>
                                         </CardHeader>
                                         <CardContent className="space-y-4">
@@ -5882,7 +5882,7 @@ export default function SendMoney() {
                                     <div className="sticky top-6 space-y-6">
                                         <Card className="rounded-xl border border-[#efefee] bg-white shadow-[-2px_4px_16px_0px_rgba(0,0,0,0.04)]">
                                             <CardHeader className="pb-4 bg-white border-b border-[#efefee]">
-                                                <CardTitle className="text-base font-semibold text-[#323130]">Amount Summary</CardTitle>
+                                                <CardTitle className="text-base font-semibold text-[#323130]">Amount summary</CardTitle>
                                             </CardHeader>
                                             <CardContent className="space-y-3 text-sm pt-4">
                                                 {/* Promo Discount Row (shown when a code is applied) */}
@@ -6384,7 +6384,7 @@ export default function SendMoney() {
                             <div className="w-14 h-14 mx-auto rounded-full bg-amber-100 flex items-center justify-center">
                                 <AlertTriangle className="w-7 h-7 text-amber-600" />
                             </div>
-                            <h3 className="text-lg font-bold text-gray-900">Rate Expiring Soon</h3>
+                            <h3 className="text-lg font-bold text-gray-900">Rate expiring soon</h3>
                             <p className="text-sm text-gray-600">
                                 Your exchange rate will expire in <span className="font-bold text-red-600">{sessionTimeLeft}</span> seconds. Would you like to extend your session?
                             </p>
@@ -6473,7 +6473,7 @@ export default function SendMoney() {
                                 <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center">
                                     <Building2 className="w-7 h-7 text-blue-600" />
                                 </div>
-                                <h3 className="text-lg font-bold text-gray-900">Confirm Payment Method</h3>
+                                <h3 className="text-lg font-bold text-gray-900">Confirm payment method</h3>
                                 <p className="text-sm text-gray-600">
                                     You have selected <span className="font-semibold text-gray-900">Manual Bank Transfer. Send to our local account (Pay within 30 minutes)</span> option for payment. Do you want to proceed?
                                 </p>
@@ -6559,7 +6559,7 @@ export default function SendMoney() {
                                 <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center">
                                     <AlertTriangle className="w-7 h-7 text-red-600" />
                                 </div>
-                                <h3 className="text-lg font-bold text-gray-900">Transaction Expired</h3>
+                                <h3 className="text-lg font-bold text-gray-900">Transaction expired</h3>
                                 <p className="text-sm text-gray-600">
                                     The payment time has expired. This transaction will now be <span className="font-semibold text-red-600">aborted</span>. You will be redirected to the dashboard in <span className="font-semibold text-gray-900">{expiryCountdown}s</span>.
                                 </p>

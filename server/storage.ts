@@ -105,6 +105,7 @@ export interface IStorage {
   getPayoutAccountById(id: string): Promise<PayoutAccountRecord | undefined>;
   listPayoutAccountsByOwner(ownerId: string): Promise<PayoutAccountRecord[]>;
   updatePayoutAccount(id: string, patch: Partial<PayoutAccountRecord>): Promise<PayoutAccountRecord | undefined>;
+  deletePayoutAccount(id: string): Promise<boolean>;
 
   createMoneyRequest(request: MoneyRequest): Promise<MoneyRequest>;
   getMoneyRequestById(id: string): Promise<MoneyRequest | undefined>;
@@ -398,13 +399,13 @@ export class MemStorage implements IStorage {
       businessPhoneCode: null,
       businessPhoneNumber: null,
       directorName: null,
-      buildingNumber: null,
+      buildingNumber: "1",
       buildingName: null,
       subStreet: null,
-      street: null,
-      addressCity: null,
-      addressPostcode: null,
-      addressCountry: null,
+      street: "Sheldon Square",
+      addressCity: "London",
+      addressPostcode: "W2 6TT",
+      addressCountry: "GB",
       birthCountry: null,
       status: "active",
       kycStatus: "passed",
@@ -1199,6 +1200,21 @@ export class MemStorage implements IStorage {
     this.payoutAccountsMap.set(id, updated);
     this.persistDevSnapshot();
     return updated;
+  }
+
+  async deletePayoutAccount(id: string): Promise<boolean> {
+    const existing = this.payoutAccountsMap.get(id);
+    if (!existing) return false;
+    this.payoutAccountsMap.delete(id);
+    if (existing.isDefault) {
+      // Promote the first remaining verified account of the same owner (oldest first).
+      const next = Array.from(this.payoutAccountsMap.values())
+        .filter((a) => a.ownerId === existing.ownerId && a.verificationStatus === "verified")
+        .sort((a, b) => (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0))[0];
+      if (next) this.payoutAccountsMap.set(next.id, { ...next, isDefault: true });
+    }
+    this.persistDevSnapshot();
+    return true;
   }
 
   // ─── Request Money: money requests ──────────────────────────────

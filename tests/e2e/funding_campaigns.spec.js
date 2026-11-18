@@ -7,7 +7,7 @@ test.describe('Funding Campaigns', () => {
 
         // Verify URL and Title
         await expect(page).toHaveURL(/\/group-pay/);
-        await expect(page.getByRole('heading', { name: 'Funding Campaigns', exact: true })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Funding campaigns', exact: true })).toBeVisible();
     });
 
     test('Create a new campaign', async ({ page }) => {
@@ -61,14 +61,14 @@ test.describe('Funding Campaigns', () => {
         await page.getByRole('button', { name: 'Clear Filters' }).click();
 
         // Verify header is visible again. Using strict heading role to avoid matching text in other elements
-        await expect(page.getByRole('heading', { name: 'Funding Campaigns', exact: true })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Funding campaigns', exact: true })).toBeVisible();
     });
 
     test('View Campaign Details', async ({ page }) => {
         await page.goto('/group-pay');
 
         // Wait for grid to load by ensuring header is present
-        await expect(page.getByRole('heading', { name: 'Funding Campaigns', exact: true })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Funding campaigns', exact: true })).toBeVisible();
 
         // Click on the first "View" button found
         const viewButton = page.getByRole('button', { name: 'View' }).first();
@@ -100,7 +100,7 @@ test.describe('Funding Campaigns', () => {
         const accountId = (await account.json()).data.id;
 
         await page.goto('/group-pay');
-        await expect(page.getByRole('heading', { name: 'Funding Campaigns', exact: true })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Funding campaigns', exact: true })).toBeVisible();
 
         // Campaign created out-of-band (as if from another tab or device)
         const campaignName = `Auto Reflect ${Date.now()}`;

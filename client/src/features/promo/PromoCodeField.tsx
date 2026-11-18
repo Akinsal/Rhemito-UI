@@ -71,7 +71,7 @@ export function PromoCodeField({ promo, bare = false }: PromoCodeFieldProps) {
   return (
     <Card>
       <CardHeader className="pb-4">
-        <CardTitle className="text-base">{PROMO_COPY.cardTitle}</CardTitle>
+        <CardTitle className="text-base">Promo code</CardTitle>
       </CardHeader>
       <CardContent>{body}</CardContent>
     </Card>
