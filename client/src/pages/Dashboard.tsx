@@ -192,6 +192,33 @@ function DateCellWithGmtTooltip({ dateLabel, timestampMs }: { dateLabel: string;
   );
 }
 
+function OrderNoCell({ orderNo }: { orderNo: string }) {
+  const compact = orderNo.length > 2 ? `${orderNo.slice(0, 2)}...` : orderNo;
+  return (
+    <>
+      <span className="hidden @4xl:inline tracking-tight whitespace-nowrap">
+        {orderNo}
+      </span>
+      <Tooltip delayDuration={150}>
+        <TooltipTrigger asChild>
+          <span
+            tabIndex={0}
+            className="inline @4xl:hidden tracking-tight whitespace-nowrap cursor-default border-b border-dotted border-transparent hover:border-slate-400 transition-colors focus-visible:outline-none"
+          >
+            {compact}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent
+          side="top"
+          className="bg-foreground text-background px-2.5 py-1 text-xs font-medium shadow-sm tabular-nums"
+        >
+          {orderNo}
+        </TooltipContent>
+      </Tooltip>
+    </>
+  );
+}
+
 function SendMoneyRow({
   tx,
   dateSort,
@@ -223,7 +250,7 @@ function SendMoneyRow({
           <span className="w-5 h-5 rounded-full border border-blue-500 text-blue-600 flex items-center justify-center shrink-0">
             <ArrowUpRight className="w-3 h-3" aria-hidden />
           </span>
-          <span className="tracking-tight">{tx.id}</span>
+          <OrderNoCell orderNo={tx.id} />
         </div>
         <div className="text-xs font-bold text-gray-900 mt-0.5 sm:hidden pl-7 tabular-nums">{formatDashboardAmount(tx.amount)}</div>
       </TableCell>
@@ -445,7 +472,7 @@ function UnifiedRow({
           <span className="w-5 h-5 rounded-full border border-blue-500 text-blue-600 flex items-center justify-center shrink-0">
             <ArrowDownLeft className="w-3 h-3" aria-hidden />
           </span>
-          <span className="tracking-tight">{row.ref}</span>
+          <OrderNoCell orderNo={row.ref} />
         </div>
         <div className="text-xs font-bold text-gray-900 mt-0.5 sm:hidden pl-7 tabular-nums">{formatDashboardAmount(row.amountLabel)}</div>
       </TableCell>
@@ -1754,7 +1781,7 @@ export default function Dashboard() {
           ref={transactionsSectionRef}
           data-testid="section-transactions"
         >
-          <Card className="rounded-2xl border border-[#efefee] bg-white shadow-[-2px_4px_16px_0px_rgba(0,0,0,0.04)] overflow-hidden">
+          <Card className="@container rounded-2xl border border-[#efefee] bg-white shadow-[-2px_4px_16px_0px_rgba(0,0,0,0.04)] overflow-hidden">
             <CardContent className="p-0">
               <div>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 md:px-6 pt-5 pb-3">
@@ -1899,7 +1926,7 @@ export default function Dashboard() {
                     <Table>
                       <TableHeader>
                         <TableRow className="hover:bg-transparent border-b border-slate-100">
-                          <TableHead className="text-xs font-bold text-[#323130] py-3.5 pl-4 sm:pl-6">
+                          <TableHead className="text-xs font-bold text-[#323130] whitespace-nowrap py-3.5 pl-4 sm:pl-6">
                             Order No
                           </TableHead>
                           <TableHead className="text-xs font-bold text-[#323130] hidden sm:table-cell py-3.5">
