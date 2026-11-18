@@ -148,7 +148,7 @@ export default function CollectionAccount() {
         <div
           className="flex items-center gap-6 px-1"
           role="tablist"
-          aria-label="Collection Account and Wallets"
+          aria-label="Payments account and Wallets"
         >
           <button
             type="button"
@@ -163,7 +163,7 @@ export default function CollectionAccount() {
                 : "border-transparent font-normal text-[#605e5c] hover:text-[#323130]"
             )}
           >
-            Collection Accounts
+            Payments account
           </button>
 
           <button
