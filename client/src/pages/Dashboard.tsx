@@ -24,6 +24,7 @@ import { cancelRequest, getRequests, resendEmail, type MoneyRequestView } from "
 import { invoiceListUrl, resendInvoiceNotificationRequest, type InvoiceListItem, type InvoiceListResponse } from "@/lib/invoices";
 import { fetchCampaigns } from "@/lib/groupPay";
 import { cancelSendMoneyTransaction, getSendMoneyTransactions, toSendMoneyRow } from "@/lib/sendMoney";
+import { CURRENCY_SYMBOLS } from "@shared/currencies";
 import {
   DEMO_GBP_COLLECTION_BALANCE,
   DEMO_GBP_TOTAL_SENT,
@@ -144,6 +145,28 @@ function formatGmtTime24(timestampMs: number, dateLabel: string): string | null 
   return `${hh}:${mm} GMT`;
 }
 
+function formatDashboardAmount(rawAmount: string): string {
+  const codeMatch = rawAmount.match(/\b([A-Z]{3})\b/);
+  const code = codeMatch?.[1];
+  let symbol = code ? CURRENCY_SYMBOLS[code] : undefined;
+  if (!symbol && code) {
+    try {
+      const parts = new Intl.NumberFormat("en-GB", {
+        style: "currency",
+        currency: code,
+        currencyDisplay: "narrowSymbol",
+      }).formatToParts(0);
+      symbol = parts.find((p) => p.type === "currency")?.value;
+    } catch {
+      symbol = undefined;
+    }
+  }
+  const numMatch = rawAmount.replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
+  if (!numMatch) return rawAmount;
+  const formattedNum = formatAccountAmount(Number(numMatch[0]));
+  return symbol ? `${symbol} ${formattedNum}` : formattedNum;
+}
+
 function DateCellWithGmtTooltip({ dateLabel, timestampMs }: { dateLabel: string; timestampMs: number }) {
   const gmtTime = formatGmtTime24(timestampMs, dateLabel);
   if (!gmtTime) {
@@ -202,7 +225,7 @@ function SendMoneyRow({
           </span>
           <span className="tracking-tight">{tx.id}</span>
         </div>
-        <div className="text-xs font-bold text-gray-900 mt-0.5 sm:hidden pl-7">{tx.amount}</div>
+        <div className="text-xs font-bold text-gray-900 mt-0.5 sm:hidden pl-7 tabular-nums">{formatDashboardAmount(tx.amount)}</div>
       </TableCell>
       <TableCell className="text-slate-500 text-[13px] hidden sm:table-cell py-4">
         <DateCellWithGmtTooltip dateLabel={tx.date} timestampMs={dateSort} />
@@ -214,7 +237,7 @@ function SendMoneyRow({
         <span>{tx.service}</span>
       </TableCell>
       <TableCell className="text-slate-600 text-[13px] font-normal py-4 hidden sm:table-cell">
-        <span>{tx.amount}</span>
+        <span className="tabular-nums whitespace-nowrap">{formatDashboardAmount(tx.amount)}</span>
       </TableCell>
       <TableCell className="text-center py-4">
         {scheduled ? (
@@ -424,7 +447,7 @@ function UnifiedRow({
           </span>
           <span className="tracking-tight">{row.ref}</span>
         </div>
-        <div className="text-xs font-bold text-gray-900 mt-0.5 sm:hidden pl-7">{row.amountLabel}</div>
+        <div className="text-xs font-bold text-gray-900 mt-0.5 sm:hidden pl-7 tabular-nums">{formatDashboardAmount(row.amountLabel)}</div>
       </TableCell>
       <TableCell className="text-slate-500 text-[13px] hidden sm:table-cell py-4">
         <DateCellWithGmtTooltip dateLabel={row.dateLabel} timestampMs={row.dateSort} />
@@ -436,8 +459,7 @@ function UnifiedRow({
         <span>{row.service}</span>
       </TableCell>
       <TableCell className="text-slate-600 text-[13px] font-normal py-4 hidden sm:table-cell">
-        <span>{row.amountLabel}</span>
-        {row.subNote ? <div className="text-xs font-normal text-slate-400 mt-0.5">{row.subNote}</div> : null}
+        <span className="tabular-nums whitespace-nowrap">{formatDashboardAmount(row.amountLabel)}</span>
       </TableCell>
       <TableCell className="text-center py-4">
         <div className="flex items-center justify-center gap-2">
