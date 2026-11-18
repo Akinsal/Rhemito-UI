@@ -1146,7 +1146,7 @@ export default function Dashboard() {
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 md:gap-4 flex-1 min-w-0">
             <motion.h1
               variants={itemVariants}
-              className="shrink-0 text-2xl font-semibold tracking-tight text-[#323130] md:text-[28px]"
+              className="shrink-0 text-2xl font-normal tracking-tight text-[#323130] md:text-[28px]"
             >
               <span data-testid="dashboard-welcome">Welcome{welcomeName(user) ? ` ${welcomeName(user)}` : ""}</span>
             </motion.h1>
