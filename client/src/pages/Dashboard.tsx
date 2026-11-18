@@ -1784,39 +1784,13 @@ export default function Dashboard() {
           <Card className="@container rounded-2xl border border-[#efefee] bg-white shadow-[-2px_4px_16px_0px_rgba(0,0,0,0.04)] overflow-hidden">
             <CardContent className="p-0">
               <div>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 md:px-6 pt-5 pb-3">
+                <div className="flex items-center justify-between gap-3 px-5 md:px-6 pt-5 pb-3">
                   <div className="flex items-center gap-2.5">
                     <h2 className="font-display font-bold text-base md:text-lg text-[#605e5c] tracking-tight">
                       Recent Transactions
                     </h2>
                   </div>
                   <div className="flex items-center gap-3">
-                    <div className="relative w-full sm:w-72">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                      <Input
-                        value={search}
-                        onChange={(e) => {
-                          setSearch(e.target.value);
-                          setPage(1);
-                        }}
-                        placeholder="Search by ref, name, email or service…"
-                        className="pl-9 pr-8 h-8 text-xs rounded-full bg-slate-50/70 border-slate-200 shadow-none focus-visible:ring-blue-500"
-                        data-testid="input-search-transactions"
-                      />
-                      {search && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSearch("");
-                            setPage(1);
-                          }}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-md"
-                          aria-label="Clear search"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
                     <button
                       type="button"
                       onClick={() => setLocation("/transactions")}
