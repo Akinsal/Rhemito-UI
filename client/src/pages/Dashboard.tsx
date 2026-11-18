@@ -1372,7 +1372,7 @@ export default function Dashboard() {
                   data-testid="button-bonus-discounts"
                   className="h-10 min-w-[150px] px-6 rounded-full border border-[#2e5bff] bg-white hover:bg-blue-50 text-[#2e5bff] text-sm sm:text-base font-semibold transition-all active:scale-95 cursor-pointer"
                 >
-                  Reward
+                  Reward$
                 </button>
                 <button
                   type="button"
