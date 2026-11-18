@@ -39,25 +39,6 @@ export function Header({ onMenuClick }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-4 md:gap-6 ml-auto">
-        <nav className="hidden md:flex items-center gap-4">
-          <Link href="/home">
-            <span
-              className="px-2 py-1 text-sm font-semibold text-[#323130] hover:text-[#2e5bff] transition-colors cursor-pointer"
-              data-testid="header-link-how-it-works"
-            >
-              How it works
-            </span>
-          </Link>
-          <Link href="/sample-ticket">
-            <span
-              className="px-2 py-1 text-sm font-semibold text-[#323130] hover:text-[#2e5bff] transition-colors cursor-pointer"
-              data-testid="header-link-help"
-            >
-              Help
-            </span>
-          </Link>
-        </nav>
-
         <NotificationBell />
 
         <div
