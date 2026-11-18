@@ -134,7 +134,52 @@ type MergedRow =
   | { kind: "send_money"; scheduled: boolean; dateSort: number; tx: SendMoneyTx }
   | { kind: "receive_money" | "invoice" | "campaign"; dateSort: number; row: UnifiedTransactionRow };
 
-function SendMoneyRow({ tx, scheduled, onCancel }: { tx: SendMoneyTx; scheduled: boolean; onCancel: (tx: SendMoneyTx) => void }) {
+function formatGmtTime24(timestampMs: number, dateLabel: string): string | null {
+  if (!dateLabel || dateLabel === "—") return null;
+  const ms = timestampMs > 0 ? timestampMs : Date.parse(`${dateLabel} 00:00:00 GMT`);
+  if (!Number.isFinite(ms) || ms <= 0) return null;
+  const d = new Date(ms);
+  const hh = String(d.getUTCHours()).padStart(2, "0");
+  const mm = String(d.getUTCMinutes()).padStart(2, "0");
+  return `${hh}:${mm} GMT`;
+}
+
+function DateCellWithGmtTooltip({ dateLabel, timestampMs }: { dateLabel: string; timestampMs: number }) {
+  const gmtTime = formatGmtTime24(timestampMs, dateLabel);
+  if (!gmtTime) {
+    return <span>{dateLabel}</span>;
+  }
+  return (
+    <Tooltip delayDuration={150}>
+      <TooltipTrigger asChild>
+        <span
+          tabIndex={0}
+          className="cursor-default border-b border-dotted border-transparent hover:border-slate-400 transition-colors focus-visible:outline-none"
+        >
+          {dateLabel}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent
+        side="top"
+        className="bg-foreground text-background px-2.5 py-1 text-xs font-medium shadow-sm tabular-nums"
+      >
+        {gmtTime}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function SendMoneyRow({
+  tx,
+  dateSort,
+  scheduled,
+  onCancel,
+}: {
+  tx: SendMoneyTx;
+  dateSort: number;
+  scheduled: boolean;
+  onCancel: (tx: SendMoneyTx) => void;
+}) {
   // Resend is offered ONLY for terminal (settled) statuses.
   // Terminal = completed (successful), failed, cancelled (aborted).
   // In-flight states (awaiting_payment, pending, scheduled) never show Resend.
@@ -160,7 +205,7 @@ function SendMoneyRow({ tx, scheduled, onCancel }: { tx: SendMoneyTx; scheduled:
         <div className="text-xs font-bold text-gray-900 mt-0.5 sm:hidden pl-7">{tx.amount}</div>
       </TableCell>
       <TableCell className="text-slate-500 text-[13px] hidden sm:table-cell py-4">
-        <span>{tx.date}</span>
+        <DateCellWithGmtTooltip dateLabel={tx.date} timestampMs={dateSort} />
       </TableCell>
       <TableCell className="text-[13px] font-medium text-slate-700 py-4">
         <div>{tx.recipient}</div>
@@ -387,7 +432,7 @@ function UnifiedRow({
         <div className="text-xs font-bold text-gray-900 mt-0.5 sm:hidden pl-7">{row.amountLabel}</div>
       </TableCell>
       <TableCell className="text-slate-500 text-[13px] hidden sm:table-cell py-4">
-        <span>{row.dateLabel}</span>
+        <DateCellWithGmtTooltip dateLabel={row.dateLabel} timestampMs={row.dateSort} />
       </TableCell>
       <TableCell className="text-[13px] font-medium text-slate-700 py-4">
         <div>{row.name}</div>
@@ -946,7 +991,12 @@ export default function Dashboard() {
         };
       }),
       ...(isDemoUser
-        ? scheduledTransactions.map((tx) => ({ kind: "send_money" as const, scheduled: true, dateSort: Date.parse(tx.date) || 0, tx }))
+        ? scheduledTransactions.map((tx) => ({
+            kind: "send_money" as const,
+            scheduled: true,
+            dateSort: Date.parse(`${tx.date} 00:00:00 GMT`) || 0,
+            tx,
+          }))
         : []),
     ];
     const moneyInRows: MergedRow[] = [
@@ -1841,7 +1891,7 @@ export default function Dashboard() {
                             Order No
                           </TableHead>
                           <TableHead className="text-xs font-bold text-[#323130] hidden sm:table-cell py-3.5">
-                            Date / Time GMT
+                            Date
                           </TableHead>
                           <TableHead className="text-xs font-bold text-[#323130] py-3.5">
                             Name
@@ -1898,6 +1948,7 @@ export default function Dashboard() {
                               <SendMoneyRow
                                 key={row.tx.id}
                                 tx={row.tx}
+                                dateSort={row.dateSort}
                                 scheduled={row.scheduled}
                                 onCancel={handleCancelClick}
                               />
