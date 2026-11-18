@@ -106,7 +106,7 @@ export function Header({ onMenuClick }: HeaderProps) {
             )}
             <DropdownMenuItem
               data-testid="header-menu-my-account"
-              onClick={() => setLocation("/compliance")}
+              onClick={() => setLocation("/settings?tab=accounts")}
               className="rounded-none px-4 py-2.5 text-[14px] font-normal text-[#323130] focus:bg-[#edf1f5] focus:text-[#201f1e] cursor-pointer"
             >
               My Account

@@ -175,3 +175,24 @@
   4. **`PD-04` (`Option 2` — Sentence Case for All Headings + Dashboard Quick Service, Filter Chips & `Refer & earn` Card):**
      - Standardized headings (`h1`–`h6`, `CardTitle`, `DialogTitle`, `AlertDialogTitle`, `SheetTitle`, `DrawerTitle`, `<TableHead>` / `<th>`, Dashboard `Wallet balance` / `Payment account` labels, and `See all`) to **Sentence case** across Slice 1 and Slice 2 while preserving proper nouns, brand names (`Rhemito`, `Mito`, `Mito.money`, `MitoView`, `GroupPay`, `Reward$`), currency/country names, acronyms (`UK`, `USA`, `GBP`, `USD`, `NGN`, `KYC`, `PIN`, `OTP`, `QR`, `PDF`, `IBAN`, `SWIFT`, `BIC`, `GMT`, `UTC`, `3DS`), toast messages, and contract-pinned copy (`Use your Referral Credit` in `BONUS-19`; `"There is no Refer & Earn offer..."` in `REF-23`).
      - Per Product Owner follow-up screenshot approvals on Dashboard, also converted Quick service pill buttons (`Send money`, `Receive money`, `Reward$`, `Send invoice`, `Fund campaigns`), `Recent transactions` filter chips (`All`, `Send money`, `Receive money`, `Invoices`, `Campaigns`), `ReferEarnCard.tsx` heading (`Refer & earn` / `Show Refer & earn`), and `LegalStrip.tsx` (`Privacy policy` matching `Terms of use`) to Sentence case while keeping all `data-testid`s and `TYPE_BADGES` intact.
+
+
+---
+
+### `DEC-2026-11-18-SETTINGS-MY-ACCOUNT-PAGE` — 5-Tab `/settings` (`My Account`) Page (`Option A` + `PD-04` Sentence Case)
+- **Date Approved:** 18 November 2026 (`2026-11-18`)
+- **Decision Owner / Approver:** Mohammad Mumtaz (Product Owner — approved `Option A` 5-tab `/settings` page + `PD-04` Sentence case)
+- **Status:** `Implemented (Awaiting Live UI Approval Gate for E2E Spec Sync)`
+- **Affected Files (`Rhemito-UI`):**
+  - Frontend: `client/src/pages/Settings.tsx`, `client/src/hooks/use-auth.ts`, `client/src/components/layout/Header.tsx`, `client/src/App.tsx`, `client/src/lib/requests.ts`
+  - Backend: `server/auth.ts` (`POST /api/auth/change-password`), `server/storage.ts` (`seedDemoUser` address fields + `deletePayoutAccount`), `server/requestRoutes.ts` (`DELETE /api/request-money/payout-accounts/:id`, `PATCH /api/request-money/payout-accounts/:id/default`)
+- **Summary:**
+  1. **Routing & Navigation (`App.tsx`, `Header.tsx`, `Sidebar.tsx`):**
+     - Registered `<Route path="/settings" component={Settings} />` in `App.tsx` (preserving `/settings/notifications` ahead of `/settings` in `<Switch>`), wired Sidebar `Settings` (`/settings` → defaults to `Edit profile` tab), and updated Header profile menu `My Account` (`header-menu-my-account`) from `/compliance` to `/settings?tab=accounts` (while keeping `/compliance` accessible via Sidebar `Compliance`).
+  2. **5 URL-Synced Tabs in `Settings.tsx` (`PD-04` Sentence Case, Zero Hard-Coded Customer Names per `REF-18`, Tailwind CSS Only):**
+     - **Tab 1 — `Edit profile` (`?tab=profile` / `/settings`):** `Display timezone` `<Select>` persisted in `localStorage` (`rhemito_display_timezone`) with `<Home />` default reset button and UTC helper caption, plus KYC-locked `Profile details` rows (`Full name`, `Email`, `Mobile number`, `Country of residence`, `Date of birth`, `Address`) dynamically derived from `activeUser = user ?? demoUser` with dismissible `Request profile change` modal + toast feedback.
+     - **Tab 2 — `Accounts` (`?tab=accounts`):** `Account summary` displaying deterministic 6-digit `Account number` (`235324` for demo user `user_123`), top `Amount sent` (`GBP`/`USD`/`NGN` sharing `DEMO_GBP_TOTAL_SENT` and `sendMoneyQuery` totals), and 2-column `Wallet` (`GBP`/`NGN` via `WALLET_CURRENCY_ACCOUNTS`) and `Payment account` (`GBP`/`USD`/`NGN` via `COLLECTION_CURRENCY_ACCOUNTS`) summary cards.
+     - **Tab 3 — `Change password` (`?tab=password`):** Validated `Existing password`, `New password`, and `Confirm new password` fields with `Eye`/`EyeOff` visibility toggles, backed by `POST /api/auth/change-password` (`bcrypt` verification + 12-round hash update) with toast feedback.
+     - **Tab 4 — `My cards` (`?tab=cards`):** Responsive 3-column grid of saved Visa & Mastercard cards (`localStorage` `rhemito_saved_cards_${activeUser?.id ?? "demo"}`) with EMV chip SVG, contactless icon, scheme badges, masked PANs, dynamic uppercase cardholder name from `activeUser`, expiry, and dismissible `Remove card?` confirmation dialog + toast.
+     - **Tab 5 — `My bank accounts` (`?tab=banks`):** KYC payout bank accounts table (`Bank` with `Primary` badge / `Set primary` action, `Holder`, `Account`, ISO-3 `Country`, `Currency`, and `Remove` confirmation dialog) + `Add your bank account` modal (mandatory fields above optional fields) wired to `/api/request-money/payout-accounts` (`GET`, `POST`, `PATCH /:id/default`, `DELETE /:id`).
+  3. **Superseded Rule:** Earlier `Header.tsx` `header-menu-my-account` temporary target (`/compliance`) superseded by `/settings?tab=accounts`.

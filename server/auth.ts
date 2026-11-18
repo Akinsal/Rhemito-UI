@@ -675,6 +675,44 @@ export function registerAuthRoutes(app: Express) {
     }
   });
 
+  // ─── Change Password (signed-in customer; demo session allowed in prototype mode) ───
+  app.post("/api/auth/change-password", async (req: Request, res: Response) => {
+    try {
+      const userId = req.session?.userId ?? (demoModeEnabled ? "user_123" : null);
+      if (!userId) return res.status(401).json({ message: "Please sign in to continue." });
+      const user = await storage.getAuthUserById(userId);
+      if (!user) return res.status(404).json({ message: "User not found." });
+
+      const { existingPassword, newPassword } = (req.body ?? {}) as {
+        existingPassword?: unknown;
+        newPassword?: unknown;
+      };
+      if (
+        typeof existingPassword !== "string" ||
+        typeof newPassword !== "string" ||
+        !existingPassword ||
+        !newPassword
+      ) {
+        return res.status(400).json({ message: "Existing password and new password are required." });
+      }
+      if (newPassword.length < 8) {
+        return res.status(400).json({ message: "New password must be at least 8 characters." });
+      }
+      if (newPassword === existingPassword) {
+        return res.status(400).json({ message: "New password must be different from your existing password." });
+      }
+      const matches = await bcrypt.compare(existingPassword, user.password);
+      if (!matches) return res.status(400).json({ message: "Existing password is incorrect." });
+
+      const hashed = await bcrypt.hash(newPassword, 12);
+      await storage.updateAuthUserPassword(user.email, hashed);
+      return res.json({ success: true, message: "Password updated successfully." });
+    } catch (error) {
+      console.error("Change password error:", error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.post("/api/auth/logout", (req: Request, res: Response) => {
     req.session.destroy((err) => {
       if (err) {

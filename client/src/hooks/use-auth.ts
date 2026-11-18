@@ -13,6 +13,16 @@ export interface AuthUser {
   lastName: string | null;
   businessName?: string | null;
   businessRegNo?: string | null;
+  dateOfBirth?: string | null;
+  mobileCode?: string | null;
+  mobileNumber?: string | null;
+  buildingNumber?: string | null;
+  buildingName?: string | null;
+  subStreet?: string | null;
+  street?: string | null;
+  addressCity?: string | null;
+  addressPostcode?: string | null;
+  addressCountry?: string | null;
   status: string;
 }
 
