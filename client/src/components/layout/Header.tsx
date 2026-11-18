@@ -27,15 +27,12 @@ export function Header({ onMenuClick }: HeaderProps) {
         </button>
 
         <Link href="/" data-testid="link-logo-home">
-          <div className="flex items-center gap-2.5 cursor-pointer">
+          <div className="flex items-center cursor-pointer">
             <img
               src="/Rhemito-logo.svg"
               alt="Rhemito Logo"
               className="w-[26px] h-[33px] object-contain"
             />
-            <span className="font-display font-bold text-lg text-[#323130] tracking-tight">
-              Rhemito
-            </span>
           </div>
         </Link>
       </div>
