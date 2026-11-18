@@ -1692,11 +1692,6 @@ export default function Dashboard() {
                               Expires {formatUkDate(soonestAny.expires_on)}
                             </span>
                           ) : null}
-                          {referralAvailable > 0 && schemeAvailable > 0 && (
-                            <span className="text-[11px] text-[#605e5c] whitespace-nowrap">
-                              · Soonest-expiring used first
-                            </span>
-                          )}
                         </div>
                       </div>
 
