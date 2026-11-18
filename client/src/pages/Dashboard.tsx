@@ -1700,59 +1700,26 @@ export default function Dashboard() {
                         </div>
                       </div>
 
-                      {/* Zone B — How to redeem it + 1-click CTAs */}
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between xl:justify-end gap-3 xl:pl-4 xl:border-l xl:border-slate-100">
-                        <div
-                          data-testid="dashboard-bonus-redemption-modes"
-                          className="space-y-1 max-w-md"
-                        >
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="inline-flex items-center gap-1 rounded-lg border border-[#87c2fc]/60 bg-[#ecf5ff] px-2.5 py-1 text-xs text-[#323130]">
-                              <ArrowDownLeft
-                                className="h-3.5 w-3.5 text-[#2e5bff] shrink-0"
-                                aria-hidden="true"
-                              />
-                              <span>
-                                <strong className="font-semibold text-[#2e5bff]">Pay less:</strong>{" "}
-                                Deduct {activeAmountText} off what you pay on Step 1
-                              </span>
-                            </span>
-                            <span className="inline-flex items-center gap-1 rounded-lg border border-teal-200/80 bg-teal-50/70 px-2.5 py-1 text-xs text-[#323130]">
-                              <ArrowUpRight
-                                className="h-3.5 w-3.5 text-teal-700 shrink-0"
-                                aria-hidden="true"
-                              />
-                              <span>
-                                <strong className="font-semibold text-teal-800">Send more:</strong>{" "}
-                                Add +{activeAmountText} extra to recipient payout at no extra cost
-                              </span>
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-[#605e5c]">
-                            Pick on Step 1 of Send Money (used separately from Promo Codes).
-                          </p>
-                        </div>
-
-                        <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-1.5 shrink-0">
-                          {!rewards.data?.wallet.bonus_blocked && (
-                            <Button
-                              type="button"
-                              data-testid="dashboard-redeem-send-money-cta"
-                              onClick={() => handleRedeemOnSendMoney()}
-                              className="h-9 rounded-full bg-[#2e5bff] hover:bg-blue-700 px-4 text-xs sm:text-[13px] font-semibold text-white shadow-none cursor-pointer"
-                            >
-                              <span>Redeem on Send Money</span>
-                              <ArrowRight className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
-                            </Button>
-                          )}
-                          <button
+                      {/* Zone B — 1-click CTAs */}
+                      <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-1.5 shrink-0">
+                        {!rewards.data?.wallet.bonus_blocked && (
+                          <Button
                             type="button"
-                            onClick={() => setLocation("/bonus-discounts")}
-                            className="inline-flex items-center gap-1 text-xs font-semibold text-[#2e5bff] hover:text-blue-700 hover:underline cursor-pointer"
+                            data-testid="dashboard-redeem-send-money-cta"
+                            onClick={() => handleRedeemOnSendMoney()}
+                            className="h-9 rounded-full bg-[#2e5bff] hover:bg-blue-700 px-4 text-xs sm:text-[13px] font-semibold text-white shadow-none cursor-pointer"
                           >
-                            <span>Details in Reward$</span>
-                          </button>
-                        </div>
+                            <span>Redeem on send money</span>
+                            <ArrowRight className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                          </Button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setLocation("/bonus-discounts")}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-[#2e5bff] hover:text-blue-700 hover:underline cursor-pointer"
+                        >
+                          <span>Details in Reward$</span>
+                        </button>
                       </div>
                     </div>
                   </Card>

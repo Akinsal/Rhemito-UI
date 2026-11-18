@@ -196,3 +196,20 @@
      - **Tab 4 — `My cards` (`?tab=cards`):** Responsive 3-column grid of saved Visa & Mastercard cards (`localStorage` `rhemito_saved_cards_${activeUser?.id ?? "demo"}`) with EMV chip SVG, contactless icon, scheme badges, masked PANs, dynamic uppercase cardholder name from `activeUser`, expiry, and dismissible `Remove card?` confirmation dialog + toast.
      - **Tab 5 — `My bank accounts` (`?tab=banks`):** KYC payout bank accounts table (`Bank` with `Primary` badge / `Set primary` action, `Holder`, `Account`, ISO-3 `Country`, `Currency`, and `Remove` confirmation dialog) + `Add your bank account` modal (mandatory fields above optional fields) wired to `/api/request-money/payout-accounts` (`GET`, `POST`, `PATCH /:id/default`, `DELETE /:id`).
   3. **Superseded Rule:** Earlier `Header.tsx` `header-menu-my-account` temporary target (`/compliance`) superseded by `/settings?tab=accounts`.
+
+---
+
+### `DEC-2026-11-18-REMOVE-OVERVIEW-REDEMPTION-MODE-PILLS` — Remove `Pay less` / `Send more` Pills & Step 1 Caption on Overview + Sentence-Case `Redeem on send money` (`PD-05` / `BONUS-18`)
+- **Date Approved:** 18 November 2026 (`2026-11-18`)
+- **Decision Owner / Approver:** Mohammad Mumtaz (Product Owner — explicitly approved `PD-05` + Sentence-case `Redeem on send money` CTA)
+- **Status:** `Implemented (Awaiting Live UI Approval Gate for E2E Spec Sync)`
+- **Affected Files (`Rhemito-UI`):**
+  - `client/src/pages/Dashboard.tsx`
+  - `client/src/__tests__/contracts/bonus.contract.test.ts` (`BONUS-18`)
+- **Summary:**
+  1. **Overview Earned Bonus Card (`Dashboard.tsx` — `rewards-section-bonus-banners`):**
+     - Removed `dashboard-bonus-redemption-modes` (`Pay less` and `Send more` pills plus `"Pick on Step 1 of Send Money (used separately from Promo Codes)."` caption) and its left divider on Overview while keeping Zone A (earned balance, source pills, guardrails) and Zone B (`Redeem on send money` CTA + `Details in Reward$` link) intact.
+     - Updated `dashboard-redeem-send-money-cta` button label from `Redeem on Send Money` to Sentence case `Redeem on send money` (`PD-04`).
+  2. **Contract Sync (`bonus.contract.test.ts` — `BONUS-18`):**
+     - Updated `BONUS-18` to assert `expect(r2.view.queryByTestId("dashboard-bonus-redemption-modes")).toBeNull()` while preserving all balance, guardrail, referee strip, and `/send-money?reward=...` deep-link assertions (`tests/e2e/rewards_contract.spec.js` remains gated until live UI review).
+  3. **Superseded Rule:** Earlier `BONUS-18` Overview requirement displaying `Pay less` / `Send more` pills inside `rewards-section-bonus-banners` superseded by `PD-05` (`2026-11-18`).
