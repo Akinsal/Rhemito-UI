@@ -1272,15 +1272,31 @@ export default function Dashboard() {
             Account summary
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Total Sent Card */}
-            <div className="rounded-xl bg-[#FFEDE7] px-5 py-4 flex flex-col justify-between min-h-[82px]">
-              <span className="text-xs font-normal text-[#605E5C]">
+            {/* Total Sent Card — live Account / Sent opens Settings → Accounts */}
+            <div
+              role="button"
+              tabIndex={0}
+              data-testid="card-total-sent"
+              onClick={() => setLocation("/settings?tab=accounts")}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setLocation("/settings?tab=accounts");
+                }
+              }}
+              className="group rounded-xl bg-[#FFEDE7] px-5 py-4 flex flex-col justify-between min-h-[82px] cursor-pointer transition-shadow hover:shadow-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2e5bff]"
+            >
+              <span className="text-xs font-normal text-[#605E5C] group-hover:underline">
                 Total sent
               </span>
               <div className="flex items-center justify-between gap-2 mt-2">
                 <span data-testid="summary-total-sent" className="text-xl font-bold text-[#605E5C] tracking-tight whitespace-nowrap tabular-nums">
                   {totalSentFormatted}
                 </span>
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                >
                 <Select defaultValue="GBP">
                   <SelectTrigger className="h-7 w-[76px] rounded-full text-xs bg-white border border-[#d2d0ce] shadow-none font-medium text-[#323130] px-2.5">
                     <SelectValue />
@@ -1289,6 +1305,7 @@ export default function Dashboard() {
                     <SelectItem value="GBP">GBP</SelectItem>
                   </SelectContent>
                 </Select>
+                </div>
               </div>
             </div>
 
@@ -1304,9 +1321,9 @@ export default function Dashboard() {
                   setLocation("/overview/collectionaccount?tab=wallet");
                 }
               }}
-              className="rounded-xl bg-[#E5F1FE] px-5 py-4 flex flex-col justify-between min-h-[82px] cursor-pointer transition-shadow hover:shadow-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2e5bff]"
+              className="group rounded-xl bg-[#E5F1FE] px-5 py-4 flex flex-col justify-between min-h-[82px] cursor-pointer transition-shadow hover:shadow-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2e5bff]"
             >
-              <span className="text-xs font-normal text-[#605E5C]">
+              <span className="text-xs font-normal text-[#605E5C] group-hover:underline">
                 Wallet balance
               </span>
               <div className="flex items-center justify-between gap-2 mt-2">
@@ -1341,9 +1358,9 @@ export default function Dashboard() {
                   setLocation("/overview/collectionaccount");
                 }
               }}
-              className="rounded-xl bg-[#E0EED6] px-5 py-4 flex flex-col justify-between min-h-[82px] cursor-pointer transition-shadow hover:shadow-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2e5bff]"
+              className="group rounded-xl bg-[#E0EED6] px-5 py-4 flex flex-col justify-between min-h-[82px] cursor-pointer transition-shadow hover:shadow-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2e5bff]"
             >
-              <span className="text-xs font-normal text-[#605E5C]">
+              <span className="text-xs font-normal text-[#605E5C] group-hover:underline">
                 Payment account
               </span>
               <div className="flex items-center justify-between gap-2 mt-2">

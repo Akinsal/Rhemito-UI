@@ -2289,11 +2289,7 @@ export default function SendMoney() {
     ]);
 
     const AVATAR_COLORS = [
-        "bg-blue-100 text-blue-600",
-        "bg-purple-100 text-purple-600",
-        "bg-green-100 text-green-600",
-        "bg-orange-100 text-orange-600",
-        "bg-teal-100 text-teal-600",
+        "bg-[#D3E9FF] text-[#323130]",
     ];
 
     const mapBeneficiaryToRecipient = (b: MitoBeneficiaryItem, idx: number) => {
@@ -3571,13 +3567,13 @@ export default function SendMoney() {
                                         {/* Recent Recipients - Circles */}
                                         <div className="space-y-4">
                                             <Label className="text-gray-500 font-medium">Recent Recipients</Label>
-                                            <div className="flex gap-6 overflow-x-auto pb-4">
+                                            <div className="flex flex-wrap justify-start">
                                                 {baseRecipientsList.slice(0, 5).map(r => (
-                                                    <div key={r.id} className="flex flex-col items-center gap-2 cursor-pointer group min-w-[80px]" onClick={() => { setSelectedRecipient(r); handleNext(); }}>
-                                                        <div className={`w-14 h-14 rounded-full flex items-center justify-center font-bold text-lg ${r.color} group-hover:ring-2 ring-primary ring-offset-2 transition-all`}>
+                                                    <div key={r.id} className="flex w-1/5 flex-col items-center cursor-pointer" onClick={() => { setSelectedRecipient(r); handleNext(); }}>
+                                                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#D3E9FF] text-sm font-medium uppercase text-[#323130]">
                                                             {r.initials}
                                                         </div>
-                                                        <span className="text-xs font-medium text-gray-600 text-center truncate w-full">{r.name.split(' ')[0]}</span>
+                                                        <span className="mt-4 w-full truncate text-center text-sm text-[#323130]">{r.name.split(' ')[0]}</span>
                                                     </div>
                                                 ))}
                                             </div>
@@ -3632,7 +3628,7 @@ export default function SendMoney() {
                                                                     className="flex items-center justify-between px-3 py-2.5 hover:bg-blue-50/70 rounded-lg cursor-pointer transition-colors"
                                                                 >
                                                                     <div className="flex items-center gap-3 min-w-0">
-                                                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${r.color} flex-shrink-0`}>
+                                                                        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#D3E9FF] text-xs font-medium uppercase text-[#323130]">
                                                                             {r.initials}
                                                                         </div>
                                                                         <div className="min-w-0">
@@ -3711,48 +3707,18 @@ export default function SendMoney() {
                                                     onClick={() => { setSelectedRecipient(r); handleNext(); }}
                                                     className="flex items-center justify-between p-4 hover:bg-gray-50 rounded-xl cursor-pointer transition-colors group"
                                                 >
-                                                    <div className="flex items-center gap-4">
-                                                        <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm ${r.color} relative flex-shrink-0`}>
+                                                    <div className="flex items-center gap-4 min-w-0">
+                                                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[#D3E9FF] text-sm font-medium uppercase text-[#323130]">
                                                             {r.initials}
-                                                            <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
                                                         </div>
                                                         <div className="min-w-0">
-                                                            <div className="font-bold text-gray-900">{r.name}</div>
-                                                            <div className="text-sm text-gray-500">{r.bank}</div>
-                                                            {/* Banking detail chips */}
-                                                            <div className="flex flex-wrap gap-1.5 mt-1">
-                                                                {r.account && (
-                                                                    <span className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-mono">
-                                                                        Acct: {r.account.length > 16 ? `${r.account.slice(0, 4)}…${r.account.slice(-4)}` : r.account}
-                                                                    </span>
-                                                                )}
-                                                                {r.sortCode && (
-                                                                    <span className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-mono">
-                                                                        Sort: {r.sortCode}
-                                                                    </span>
-                                                                )}
-                                                                {r.iban && (
-                                                                    <span className="inline-flex items-center gap-1 text-xs bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full font-mono">
-                                                                        IBAN: {r.iban.slice(0, 12)}…
-                                                                    </span>
-                                                                )}
-                                                                {r.swift && (
-                                                                    <span className="inline-flex items-center gap-1 text-xs bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full font-mono">
-                                                                        SWIFT: {r.swift}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                            {/* Narration */}
-                                                            {(r.narration || r.currency === "NGN") && (
-                                                                <div className="text-xs text-gray-400 italic mt-0.5 truncate max-w-[220px]">
-                                                                    "{r.narration || (r.currency === "NGN" ? "Money transfer" : "")}"
-                                                                </div>
-                                                            )}
+                                                            <div className="font-medium text-[#323130] truncate">{r.name}</div>
+                                                            <div className="text-sm text-[#605E5C] truncate">{r.bank}{r.account ? ` · ${r.account}` : ""}</div>
                                                         </div>
                                                     </div>
                                                     <div className="text-right text-sm flex-shrink-0 ml-2">
-                                                        <div className="text-blue-500 font-medium">Bank Deposit</div>
-                                                        <div className="text-gray-400 font-mono">{r.currency}</div>
+                                                        <div className="font-medium text-[#323130]">Bank Deposit</div>
+                                                        <div className="text-[#605E5C]">{r.currency}</div>
                                                     </div>
                                                 </div>
                                             ))}
@@ -3898,9 +3864,16 @@ export default function SendMoney() {
                                             </button>
                                         </div>
                                     )}
-                                    <Card>
-                                        <CardHeader>
-                                            <CardTitle className="text-base">Recipient details</CardTitle>
+                                    <Card className="rounded-none border-0 bg-transparent shadow-none">
+                                        <CardHeader className="flex flex-row items-center justify-between space-y-0 px-0">
+                                            <CardTitle className="text-lg font-medium text-[#2e5bff]">Recipient details</CardTitle>
+                                            <button
+                                                type="button"
+                                                onClick={handleBack}
+                                                className="text-base font-medium text-[#323130] hover:underline"
+                                            >
+                                                Back to recipients
+                                            </button>
                                         </CardHeader>
                                         <CardContent className="space-y-4">
                                             <AccountTypeToggle

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
-import { ArrowLeftRight, ArrowRight, Check, ChevronDown, ChevronUp, Copy, RefreshCw, Share2 } from "lucide-react";
+import { ArrowLeftRight, ArrowRight, Check, Copy, RefreshCw, Share2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -213,12 +213,10 @@ export function ReferEarnCard({
             type="button"
             onClick={() => setCollapsed(false)}
             aria-expanded={false}
-            aria-label="Expand referral offer"
             data-testid="toggle-refer-earn-card"
-            title="Show the full offer"
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-blue-200 bg-white text-[#2e5bff] hover:bg-blue-50 cursor-pointer"
+            className="shrink-0 text-sm font-semibold text-[#2e5bff] hover:underline cursor-pointer"
           >
-            <ChevronDown className="h-4 w-4" />
+            Show
           </button>
         </div>
       ) : (
@@ -288,12 +286,10 @@ export function ReferEarnCard({
                 type="button"
                 onClick={() => setCollapsed(true)}
                 aria-expanded={true}
-                aria-label="Collapse referral offer"
                 data-testid="toggle-refer-earn-card"
-                title="Show the summary"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-blue-200 bg-white text-[#2e5bff] hover:bg-blue-50 cursor-pointer"
+                className="text-sm font-semibold text-[#2e5bff] hover:underline cursor-pointer"
               >
-                <ChevronUp className="h-4 w-4" />
+                Hide
               </button>
             </div>
           </div>
