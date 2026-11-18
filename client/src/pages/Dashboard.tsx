@@ -7,7 +7,7 @@ import {
   Send, Receipt, ArrowRight, Gift, Copy, Check, Sparkles, Search, 
   ArrowUpRight, ArrowDownLeft, ChevronLeft, ChevronRight, Mail, 
   XCircle, FilePlus2, FileText, Users, CreditCard, Wallet, 
-  Building2, X, MoreHorizontal 
+  Building2, X, MoreVertical 
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -433,7 +433,7 @@ function UnifiedRow({
                   aria-label={`More actions for ${row.ref}`}
                   data-testid={`button-actions-more-${row.ref}`}
                 >
-                  <MoreHorizontal className="w-4 h-4" />
+                  <MoreVertical className="w-4 h-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48 rounded-xl p-1.5 shadow-lg border-slate-200/90">
@@ -1731,7 +1731,7 @@ export default function Dashboard() {
                     <button
                       type="button"
                       onClick={() => setLocation("/transactions")}
-                      className="text-xs font-semibold text-slate-500 hover:text-blue-600 shrink-0 transition-colors cursor-pointer"
+                      className="text-xs font-bold text-slate-500 hover:text-blue-600 shrink-0 transition-colors cursor-pointer"
                     >
                       See All
                     </button>
