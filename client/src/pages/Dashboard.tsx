@@ -1302,7 +1302,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Collection Account Card */}
+            {/* Payment Account Card */}
             <div
               role="button"
               tabIndex={0}
@@ -1317,7 +1317,7 @@ export default function Dashboard() {
               className="rounded-xl bg-[#E0EED6] px-5 py-4 flex flex-col justify-between min-h-[82px] cursor-pointer transition-shadow hover:shadow-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2e5bff]"
             >
               <span className="text-xs font-normal text-[#605E5C]">
-                Collection Account
+                Payment Account
               </span>
               <div className="flex items-center justify-between gap-2 mt-2">
                 <span data-testid="summary-collection-account" className="text-xl font-bold text-[#605E5C] tracking-tight whitespace-nowrap tabular-nums">
