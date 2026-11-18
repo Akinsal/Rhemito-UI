@@ -124,8 +124,8 @@ const TRANSACTIONS_PAGE_SIZE = 20;
 
 const TYPE_FILTERS: { value: TypeFilter; label: string }[] = [
   { value: "all", label: "All" },
-  { value: "send_money", label: "Send Money" },
-  { value: "receive_money", label: "Receive Money" },
+  { value: "send_money", label: "Send money" },
+  { value: "receive_money", label: "Receive money" },
   { value: "invoice", label: "Invoices" },
   { value: "campaign", label: "Campaigns" },
 ];
@@ -342,8 +342,8 @@ function SendMoneyRow({
           </div>
         )}
       </TableCell>
-      <TableCell className="text-center py-4 pr-4 sm:pr-6">
-        <div className="inline-grid grid-cols-[88px_32px] items-center justify-center gap-1.5">
+      <TableCell className="text-center py-4 px-8 sm:px-10">
+        <div className="inline-flex items-center justify-center">
           {scheduled ? (
             <Button
               size="sm"
@@ -394,7 +394,6 @@ function SendMoneyRow({
               )}
             </AnimatePresence>
           )}
-          <span className="h-8 w-8 shrink-0" aria-hidden="true" />
         </div>
       </TableCell>
     </TableRow>
@@ -496,8 +495,8 @@ function UnifiedRow({
           </span>
         </div>
       </TableCell>
-      <TableCell className="text-center py-4 pr-4 sm:pr-6">
-        <div className="inline-grid grid-cols-[88px_32px] items-center justify-center gap-1.5">
+      <TableCell className="text-center py-4 px-8 sm:px-10">
+        <div className="relative inline-flex items-center justify-center">
           <Button
             size="sm"
             className="bg-blue-600 hover:bg-blue-700 text-white h-8 w-[88px] px-0 text-xs font-medium rounded-full shadow-2xs transition-all active:scale-95"
@@ -506,92 +505,92 @@ function UnifiedRow({
           >
             View
           </Button>
-          {(req && (moneyRequestAwaiting(req.status) || moneyRequestLinkShareable(req.status))) ||
-          (invoice && (invoiceActionable(invoice.status) || invoice.status === "expired")) ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0 rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900 data-[state=open]:bg-slate-100 data-[state=open]:text-slate-900 transition-colors cursor-pointer"
-                  aria-label={`More actions for ${row.ref}`}
-                  data-testid={`button-actions-more-${row.ref}`}
-                >
-                  <MoreVertical className="w-4 h-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48 rounded-xl p-1.5 shadow-lg border-slate-200/90">
-                {req && moneyRequestAwaiting(req.status) && (
-                  <DropdownMenuItem
-                    data-testid={`button-resend-${row.ref}`}
-                    onClick={() => onRequestResend(req)}
-                    className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-slate-700 cursor-pointer"
+          {((req && (moneyRequestAwaiting(req.status) || moneyRequestLinkShareable(req.status))) ||
+            (invoice && (invoiceActionable(invoice.status) || invoice.status === "expired"))) && (
+            <div className="absolute left-full ml-1.5 flex items-center">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900 data-[state=open]:bg-slate-100 data-[state=open]:text-slate-900 transition-colors cursor-pointer"
+                    aria-label={`More actions for ${row.ref}`}
+                    data-testid={`button-actions-more-${row.ref}`}
                   >
-                    <Mail className="w-4 h-4 text-slate-500" />
-                    <span>Resend email</span>
-                  </DropdownMenuItem>
-                )}
-                {req && moneyRequestLinkShareable(req.status) && (
-                  <DropdownMenuItem
-                    data-testid={`button-copy-link-${row.ref}`}
-                    onClick={() => onRequestCopyLink(req)}
-                    className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-slate-700 cursor-pointer"
-                  >
-                    <Copy className="w-4 h-4 text-slate-500" />
-                    <span>Copy payment link</span>
-                  </DropdownMenuItem>
-                )}
-                {req && moneyRequestAwaiting(req.status) && (
-                  <>
-                    <DropdownMenuSeparator className="my-1" />
+                    <MoreVertical className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48 rounded-xl p-1.5 shadow-lg border-slate-200/90">
+                  {req && moneyRequestAwaiting(req.status) && (
                     <DropdownMenuItem
-                      data-testid={`button-cancel-${row.ref}`}
-                      onClick={() => onRequestCancel(req)}
-                      className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-red-600 focus:bg-red-50 focus:text-red-700 cursor-pointer"
+                      data-testid={`button-resend-${row.ref}`}
+                      onClick={() => onRequestResend(req)}
+                      className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-slate-700 cursor-pointer"
                     >
-                      <XCircle className="w-4 h-4 text-red-600" />
-                      <span>Cancel request</span>
+                      <Mail className="w-4 h-4 text-slate-500" />
+                      <span>Resend email</span>
                     </DropdownMenuItem>
-                  </>
-                )}
-                {invoice && invoiceActionable(invoice.status) && (
-                  <DropdownMenuItem
-                    disabled={resendingInvoiceId === invoice.id}
-                    data-testid={`button-resend-${row.ref}`}
-                    onClick={() => onInvoiceResend(invoice)}
-                    className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-slate-700 cursor-pointer"
-                  >
-                    <Mail className="w-4 h-4 text-slate-500" />
-                    <span>Resend notification</span>
-                  </DropdownMenuItem>
-                )}
-                {invoice && invoiceActionable(invoice.status) && (
-                  <>
-                    <DropdownMenuSeparator className="my-1" />
+                  )}
+                  {req && moneyRequestLinkShareable(req.status) && (
                     <DropdownMenuItem
-                      data-testid={`button-cancel-${row.ref}`}
-                      onClick={() => onInvoiceCancel(invoice)}
-                      className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-red-600 focus:bg-red-50 focus:text-red-700 cursor-pointer"
+                      data-testid={`button-copy-link-${row.ref}`}
+                      onClick={() => onRequestCopyLink(req)}
+                      className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-slate-700 cursor-pointer"
                     >
-                      <XCircle className="w-4 h-4 text-red-600" />
-                      <span>Cancel invoice</span>
+                      <Copy className="w-4 h-4 text-slate-500" />
+                      <span>Copy payment link</span>
                     </DropdownMenuItem>
-                  </>
-                )}
-                {invoice?.status === "expired" && (
-                  <DropdownMenuItem
-                    data-testid={`button-create-new-${row.ref}`}
-                    onClick={() => onView("/send-invoice")}
-                    className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-blue-600 focus:bg-blue-50 focus:text-blue-700 cursor-pointer"
-                  >
-                    <FilePlus2 className="w-4 h-4 text-blue-600" />
-                    <span>Create New Invoice</span>
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <span className="h-8 w-8 shrink-0" aria-hidden="true" />
+                  )}
+                  {req && moneyRequestAwaiting(req.status) && (
+                    <>
+                      <DropdownMenuSeparator className="my-1" />
+                      <DropdownMenuItem
+                        data-testid={`button-cancel-${row.ref}`}
+                        onClick={() => onRequestCancel(req)}
+                        className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-red-600 focus:bg-red-50 focus:text-red-700 cursor-pointer"
+                      >
+                        <XCircle className="w-4 h-4 text-red-600" />
+                        <span>Cancel request</span>
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  {invoice && invoiceActionable(invoice.status) && (
+                    <DropdownMenuItem
+                      disabled={resendingInvoiceId === invoice.id}
+                      data-testid={`button-resend-${row.ref}`}
+                      onClick={() => onInvoiceResend(invoice)}
+                      className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-slate-700 cursor-pointer"
+                    >
+                      <Mail className="w-4 h-4 text-slate-500" />
+                      <span>Resend notification</span>
+                    </DropdownMenuItem>
+                  )}
+                  {invoice && invoiceActionable(invoice.status) && (
+                    <>
+                      <DropdownMenuSeparator className="my-1" />
+                      <DropdownMenuItem
+                        data-testid={`button-cancel-${row.ref}`}
+                        onClick={() => onInvoiceCancel(invoice)}
+                        className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-red-600 focus:bg-red-50 focus:text-red-700 cursor-pointer"
+                      >
+                        <XCircle className="w-4 h-4 text-red-600" />
+                        <span>Cancel invoice</span>
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  {invoice?.status === "expired" && (
+                    <DropdownMenuItem
+                      data-testid={`button-create-new-${row.ref}`}
+                      onClick={() => onView("/send-invoice")}
+                      className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-blue-600 focus:bg-blue-50 focus:text-blue-700 cursor-pointer"
+                    >
+                      <FilePlus2 className="w-4 h-4 text-blue-600" />
+                      <span>Create New Invoice</span>
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           )}
         </div>
       </TableCell>
@@ -1383,7 +1382,7 @@ export default function Dashboard() {
                   data-testid="button-send-money"
                   className="h-10 min-w-[150px] px-6 rounded-full bg-[#2e5bff] hover:bg-blue-700 text-white text-sm sm:text-base font-semibold transition-all active:scale-95 cursor-pointer"
                 >
-                  Send Money
+                  Send money
                 </button>
                 <button
                   type="button"
@@ -1391,7 +1390,7 @@ export default function Dashboard() {
                   data-testid="button-request-payment"
                   className="h-10 min-w-[150px] px-6 rounded-full border border-[#2e5bff] bg-white hover:bg-blue-50 text-[#2e5bff] text-sm sm:text-base font-semibold transition-all active:scale-95 cursor-pointer"
                 >
-                  Receive Money
+                  Receive money
                 </button>
                 <button
                   type="button"
@@ -1407,7 +1406,7 @@ export default function Dashboard() {
                   data-testid="button-send-invoice"
                   className="h-10 min-w-[150px] px-6 rounded-full border border-[#2e5bff] bg-white hover:bg-blue-50 text-[#2e5bff] text-sm sm:text-base font-semibold transition-all active:scale-95 cursor-pointer"
                 >
-                  Send Invoice
+                  Send invoice
                 </button>
                 <button
                   type="button"
@@ -1415,7 +1414,7 @@ export default function Dashboard() {
                   data-testid="button-funding-campaigns"
                   className="h-10 min-w-[150px] px-6 rounded-full border border-[#2e5bff] bg-white hover:bg-blue-50 text-[#2e5bff] text-sm sm:text-base font-semibold transition-all active:scale-95 cursor-pointer"
                 >
-                  Fund Campaigns
+                  Fund campaigns
                 </button>
               </div>
             </CardContent>
@@ -1918,7 +1917,7 @@ export default function Dashboard() {
                           <TableHead className="text-xs font-bold text-[#323130] text-center py-3.5">
                             Status
                           </TableHead>
-                          <TableHead className="text-xs font-bold text-[#323130] text-center py-3.5 pr-4 sm:pr-6">
+                          <TableHead className="text-xs font-bold text-[#323130] text-center py-3.5 px-8 sm:px-10">
                             Actions
                           </TableHead>
                         </TableRow>
