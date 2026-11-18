@@ -1909,7 +1909,7 @@ export default function Dashboard() {
                             Name
                           </TableHead>
                           <TableHead className="text-xs font-bold text-[#323130] hidden md:table-cell py-3.5">
-                            Service Type
+                            Service
                           </TableHead>
                           <TableHead className="text-xs font-bold text-[#323130] py-3.5 hidden sm:table-cell">
                             Amount
