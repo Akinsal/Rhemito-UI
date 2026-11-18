@@ -2,76 +2,114 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Rhemito Dashboard', () => {
 
-    test('Dashboard loads correctly', async ({ page }) => {
+    test('Dashboard loads correctly with Sentence-case headings, Welcome bold name, and Header cluster', async ({ page }) => {
         // Navigate to Dashboard
         await page.goto('/');
 
         // Verify page title
         await expect(page).toHaveTitle(/Rhemito/i);
 
-        // Verify Account Summary and Quick Services widgets are visible
+        // Verify PD-03: non-bold "Welcome" (400) + bold signed-in/demo name (700)
+        const welcome = page.getByTestId('dashboard-welcome');
+        await expect(welcome).toBeVisible();
+        await expect(welcome).toContainText('Welcome ');
+        await expect(welcome).toHaveCSS('font-weight', '400');
+        const boldName = welcome.locator('span.font-bold');
+        await expect(boldName).toBeVisible();
+        await expect(boldName).toHaveCSS('font-weight', '700');
+
+        // Verify Account summary and Quick service widgets are visible
         await expect(page.getByTestId('section-account-summary')).toBeVisible();
-        await expect(page.getByText('Quick Services')).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Quick service' })).toBeVisible();
 
-        // Verify Quick Service buttons are present
-        await expect(page.getByTestId('button-send-money')).toBeVisible();
-        await expect(page.getByTestId('button-request-payment')).toBeVisible();
-        await expect(page.getByTestId('button-bonus-discounts')).toBeVisible();
+        // Verify Quick service buttons are present in Sentence case (preserving Reward$)
+        await expect(page.getByTestId('button-send-money')).toHaveText('Send money');
+        await expect(page.getByTestId('button-request-payment')).toHaveText('Receive money');
+        await expect(page.getByTestId('button-bonus-discounts')).toHaveText('Reward$');
 
-        // Verify unified Transactions table with its type filter chips
+        // PD-01: Inline search box is removed from Dashboard Recent transactions header
+        await expect(page.getByTestId('input-search-transactions')).toHaveCount(0);
+        await expect(page.getByRole('heading', { name: 'Recent transactions' })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'See all' })).toBeVisible();
+
+        // Verify unified Transactions table with its Sentence-case type filter chips
         await expect(page.getByTestId('table-transactions')).toBeVisible();
         await expect(page.getByTestId('chip-type-all')).toBeVisible();
-        await expect(page.getByTestId('chip-type-send-money')).toBeVisible();
-        await expect(page.getByTestId('chip-type-receive-money')).toBeVisible();
-        await expect(page.getByTestId('chip-type-invoice')).toBeVisible();
-        await expect(page.getByTestId('chip-type-campaign')).toBeVisible();
+        await expect(page.getByTestId('chip-type-send-money')).toContainText('Send money');
+        await expect(page.getByTestId('chip-type-receive-money')).toContainText('Receive money');
+        await expect(page.getByTestId('chip-type-invoice')).toContainText('Invoices');
+        await expect(page.getByTestId('chip-type-campaign')).toContainText('Campaigns');
     });
 
     test('Quick Services - Send Money navigation', async ({ page }) => {
         await page.goto('/');
 
-        // Click Send Money button
+        // Click Send money button
         await page.getByTestId('button-send-money').click();
 
-        // Verify navigation to Send Money page
+        // Verify navigation to Send money page
         await expect(page).toHaveURL(/\/send-money/);
     });
 
     test('Quick Services - Receive Money opens the payment link flow directly', async ({ page }) => {
         await page.goto('/');
 
-        // The button leads straight to the Receive Money link flow (no modal)
+        // The button leads straight to the Receive money link flow (no modal)
         await page.getByTestId('button-request-payment').click();
         await expect(page).toHaveURL(/\/request-payment/);
-        await expect(page.getByRole('heading', { name: 'Receive Money' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Receive money' })).toBeVisible();
     });
 
     test('Quick Services - Send Invoice and Funding Campaigns have direct buttons', async ({ page }) => {
         await page.goto('/');
 
-        // Smaller direct entries sit on the card beside the primary buttons
+        // Direct entries sit on the Quick service card beside the primary buttons
         const sendInvoice = page.getByTestId('button-send-invoice');
         const funding = page.getByTestId('button-funding-campaigns');
-        await expect(sendInvoice).toBeVisible();
-        await expect(funding).toBeVisible();
+        await expect(sendInvoice).toHaveText('Send invoice');
+        await expect(funding).toHaveText('Fund campaigns');
 
         // The modal no longer exists on the dashboard
         await expect(page.getByText('Ways to get paid')).toHaveCount(0);
 
         await sendInvoice.click();
         await expect(page).toHaveURL(/\/send-invoice/);
-        await expect(page.getByRole('heading', { name: 'Send Invoice' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Send invoice' })).toBeVisible();
 
         await page.goto('/');
         await funding.click();
         await expect(page).toHaveURL(/\/group-pay\/create/);
     });
 
-    test('Unified Transactions table displays data', async ({ page }) => {
+    test('Dashboard Recent transactions table formats Date GMT tooltip, Amount symbol, centered Actions, and See all search', async ({ page }) => {
         await page.goto('/');
 
-        // The server is shared with other specs, so rows can spill onto later
-        // pages: locate seeded rows by searching for their reference.
+        const table = page.getByTestId('table-transactions');
+        await expect(table).toBeVisible();
+
+        // Verify Sentence-case table column headers
+        for (const col of ['Order no', 'Date', 'Name', 'Service', 'Amount', 'Status', 'Actions']) {
+            await expect(table.getByRole('columnheader', { name: col, exact: true })).toBeVisible();
+        }
+
+        // Verify first desktop row has <Symbol> <2dp> Amount format, HH:mm GMT Date tooltip, and centered Actions
+        const firstRow = table.locator('tbody tr').first();
+        await expect(firstRow).toBeVisible();
+
+        const amountCell = firstRow.locator('td').nth(4);
+        await expect(amountCell).toHaveText(/^(£|\$|€|₦|CA\$|A\$)\s[\d,]+\.\d{2}$/);
+
+        const dateTrigger = firstRow.locator('td').nth(1).locator('[tabindex="0"]');
+        await dateTrigger.hover();
+        await expect(page.getByRole('tooltip')).toHaveText(/^\d{2}:\d{2} GMT$/);
+
+        const actionsHeader = table.getByRole('columnheader', { name: 'Actions', exact: true });
+        await expect(actionsHeader).toHaveCSS('text-align', 'center');
+
+        // Clicking See all opens /transactions where full search locates seeded rows
+        await page.getByRole('button', { name: 'See all' }).click();
+        await expect(page).toHaveURL(/\/transactions/);
+
         const search = page.getByTestId('input-search-transactions');
         await search.fill('22502784');
         await expect(page.getByTestId('row-transaction-22502784')).toBeVisible();
@@ -81,15 +119,21 @@ test.describe('Rhemito Dashboard', () => {
         await expect(page.getByTestId('button-resend-22502785')).toBeVisible();
     });
 
-    test('Transaction type filters narrow the unified table', async ({ page }) => {
+    test('Transaction type filters narrow the unified table on Dashboard and /transactions', async ({ page }) => {
+        // Check Dashboard chip switching first
         await page.goto('/');
+        await page.getByTestId('chip-type-send-money').click();
+        await expect(page.getByTestId('chip-type-send-money')).toHaveClass(/bg-blue-600/);
+        await page.getByTestId('chip-type-invoice').click();
+        await expect(page.getByTestId('chip-type-invoice')).toHaveClass(/bg-blue-600/);
 
-        // Rows are located by search so other specs' data cannot push them off page 1.
+        // Use /transactions search + type chips so other specs' rows cannot push seeded rows off page 1
+        await page.goto('/transactions');
         const search = page.getByTestId('input-search-transactions');
         await search.fill('22502784');
         await expect(page.getByTestId('row-transaction-22502784')).toBeVisible();
 
-        // Send Money chip keeps the send-money rows
+        // Send money chip keeps the send-money rows
         await page.getByTestId('chip-type-send-money').click();
         await expect(page.getByTestId('row-transaction-22502784')).toBeVisible();
         await search.fill('SCH001');
@@ -101,8 +145,10 @@ test.describe('Rhemito Dashboard', () => {
         await expect(page.getByTestId('row-transaction-22502784')).toBeHidden();
     });
 
-    test('Transaction search narrows the unified table', async ({ page }) => {
+    test('Transaction search narrows the unified table via See all (/transactions)', async ({ page }) => {
         await page.goto('/');
+        await page.getByRole('button', { name: 'See all' }).click();
+        await expect(page).toHaveURL(/\/transactions/);
 
         await page.getByTestId('input-search-transactions').fill('Aisha Bello');
         await expect(page.getByTestId('row-transaction-22502787')).toBeVisible();
@@ -135,14 +181,17 @@ test.describe('Rhemito Dashboard', () => {
         await expect(rows).toHaveCount(20);
     });
 
-    test('Account Summary uses reference pastel scheme, bold heading, and clean Reward$ sidebar item', async ({ page }) => {
+    test('Account summary uses reference pastel scheme, bold Sentence-case heading, and clean Reward$ sidebar item', async ({ page }) => {
         await page.goto('/');
 
         const summarySection = page.getByTestId('section-account-summary');
         await expect(summarySection).toBeVisible();
 
-        const heading = summarySection.getByRole('heading', { name: 'Account Summary' });
+        const heading = summarySection.getByRole('heading', { name: 'Account summary' });
         await expect(heading).toHaveCSS('font-weight', '700');
+        await expect(summarySection).toContainText('Total sent');
+        await expect(summarySection).toContainText('Wallet balance');
+        await expect(summarySection).toContainText('Payment account');
 
         // Verify exact reference pastel backgrounds (#FFEDE7, #E5F1FE, #E0EED6)
         const totalSentCard = summarySection.locator('> div > div').first();
@@ -155,50 +204,51 @@ test.describe('Rhemito Dashboard', () => {
         await expect(page.getByText('Rewards waiting!')).toHaveCount(0);
     });
 
-    test('Wallet Balance and Collection Account cards open /overview/collectionaccount tabs cleanly', async ({ page }) => {
+    test('Wallet balance and Payment account cards open /overview/collectionaccount tabs cleanly', async ({ page }) => {
         await page.goto('/');
 
-        // Interacting with GBP currency selector inside Wallet Balance card does NOT navigate away
+        // Interacting with GBP currency selector inside Wallet balance card does NOT navigate away
         const walletCard = page.getByTestId('card-wallet-balance');
         await walletCard.getByRole('combobox').click();
         await expect(page).toHaveURL('/');
         await page.keyboard.press('Escape');
 
-        // Clicking Wallet Balance card opens /overview/collectionaccount?tab=wallet on Wallets tab
+        // Clicking Wallet balance card opens /overview/collectionaccount?tab=wallet on Wallets tab
         await walletCard.click();
         await expect(page).toHaveURL(/\/overview\/collectionaccount\?tab=wallet$/);
-        await expect(page.getByTestId('heading-collection-account')).toHaveText('Collection Account');
+        await expect(page.getByTestId('heading-collection-account')).toHaveText('Collection account');
+        await expect(page.getByTestId('tab-collection-accounts')).toHaveText('Payments account');
         await expect(page.getByTestId('panel-wallets')).toBeVisible();
-        await expect(page.getByTestId('wallet-details-heading')).toHaveText('Below Are The Details Of Your GBP Wallet');
+        await expect(page.getByTestId('wallet-details-heading')).toHaveText('Below are the details of your GBP wallet');
         await expect(page.getByTestId('wallet-detail-balance')).toContainText('GBP 253,007.92');
         await expect(page.getByTestId('wallet-detail-amount-sent')).toContainText('GBP 750,895.75');
         await expect(page.getByTestId('wallet-detail-tx-count')).toHaveText('89');
 
         // Switching wallet currency updates right panel
         await page.getByTestId('wallet-currency-ngn').click();
-        await expect(page.getByTestId('wallet-details-heading')).toHaveText('Below Are The Details Of Your NGN Wallet');
+        await expect(page.getByTestId('wallet-details-heading')).toHaveText('Below are the details of your NGN wallet');
         await expect(page.getByTestId('wallet-detail-balance')).toHaveText('NGN 0.00');
 
-        // Switching to Collection Accounts tab updates URL & shows bank details
+        // Switching to Payments account tab updates URL & shows bank details
         await page.getByTestId('tab-collection-accounts').click();
         await expect(page).toHaveURL(/\/overview\/collectionaccount$/);
         await expect(page.getByTestId('panel-collection-accounts')).toBeVisible();
         await expect(page.getByTestId('collection-details-heading')).toHaveText(
-            'Below Are The Details Of Your British Pounds Payments Account'
+            'Below are the details of your British Pounds payments account'
         );
         await expect(page.getByText('The Currency Cloud Limited')).toBeVisible();
 
         // Switching collection currency to USD updates right panel
         await page.getByTestId('collection-currency-usd').click();
         await expect(page.getByTestId('collection-details-heading')).toHaveText(
-            'Below Are The Details Of Your US Dollars Payments Account'
+            'Below are the details of your US Dollars payments account'
         );
 
         // Back button returns to Dashboard Overview
         await page.getByTestId('button-back-overview').click();
         await expect(page).toHaveURL('/');
 
-        // Clicking Collection Account card on Dashboard opens /overview/collectionaccount directly
+        // Clicking Payment account card on Dashboard opens /overview/collectionaccount directly
         await page.getByTestId('card-collection-account').click();
         await expect(page).toHaveURL(/\/overview\/collectionaccount$/);
         await expect(page.getByTestId('panel-collection-accounts')).toBeVisible();

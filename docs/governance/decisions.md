@@ -155,7 +155,7 @@
 ### `DEC-2026-11-18-DASHBOARD-REFINEMENTS-AND-SENTENCE-CASE` — Dashboard Header, Summary, Quick Service & Table Refinements + Application-Wide Sentence Case Headings (`PD-01..PD-04`)
 - **Date Approved:** 18 November 2026 (`2026-11-18`)
 - **Decision Owner / Approver:** Mohammad Mumtaz (Product Owner — approved `PD-01`, `PD-02 Option A`, `PD-03 Recommended`, `PD-04 Option 2`, plus Dashboard/Header refinements on `fix/welcome-heading-font-weight`)
-- **Status:** `Implemented (Awaiting Live UI Approval Gate for E2E Spec Sync)`
+- **Status:** `UI Approved by Product Owner (E2E Specs Synced — Pending Full E2E Suite Execution)`
 - **Affected Files (`Rhemito-UI`):**
   - Core & Rewards (`Slice 1`): `server/auth.ts` (`GET /api/auth/demo-user`), `client/src/hooks/use-auth.ts` (`demoUser`), `client/src/pages/Dashboard.tsx`, `client/src/components/layout/Header.tsx`, `client/src/components/layout/LegalStrip.tsx`, `client/src/components/notifications/NotificationBell.tsx`, `client/src/pages/CollectionAccount.tsx`, `client/src/pages/Transactions.tsx`, `client/src/components/rewards/ReferEarnCard.tsx`, `client/src/components/rewards/ExistingUserReferralCard.tsx`, `client/src/features/promo/PromoCodeField.tsx`, `client/src/pages/Auth/Login.tsx`, `client/src/pages/LandingPage.tsx`, `client/src/pages/Marketing.tsx`, `client/src/pages/not-found.tsx`, `client/src/__tests__/contracts/referral.contract.test.ts` (`REF-17`)
   - Flows, Dialogs & Panels (`Slice 2`): `SendMoney.tsx`, `BankTransferDesigns.tsx`, `TestCheckout.tsx`, `MobilePaymentSimulator.tsx`, `RequestPayment.tsx`, `RequestCheckout.tsx`, `Invoices.tsx`, `InvoiceView.tsx`, `SendInvoice.tsx`, `SentInvoiceDetails.tsx`, `GroupPay/*.tsx`, `Compliance.tsx`, `PayoutAccounts.tsx`, `SenderDetail.tsx`, `SendersRecipients.tsx`, `NotificationArchive.tsx`, `NotificationDetail.tsx`, `NotificationPreferences.tsx`, `components/{contacts,invoices,modals,notifications,payout,transactions}/*.tsx`, `CancelTransactionModal.tsx`, `SampleTicket.tsx`
@@ -182,7 +182,7 @@
 ### `DEC-2026-11-18-SETTINGS-MY-ACCOUNT-PAGE` — 5-Tab `/settings` (`My Account`) Page (`Option A` + `PD-04` Sentence Case)
 - **Date Approved:** 18 November 2026 (`2026-11-18`)
 - **Decision Owner / Approver:** Mohammad Mumtaz (Product Owner — approved `Option A` 5-tab `/settings` page + `PD-04` Sentence case)
-- **Status:** `Implemented (Awaiting Live UI Approval Gate for E2E Spec Sync)`
+- **Status:** `UI Approved by Product Owner (E2E Specs Synced — Pending Full E2E Suite Execution)`
 - **Affected Files (`Rhemito-UI`):**
   - Frontend: `client/src/pages/Settings.tsx`, `client/src/hooks/use-auth.ts`, `client/src/components/layout/Header.tsx`, `client/src/App.tsx`, `client/src/lib/requests.ts`
   - Backend: `server/auth.ts` (`POST /api/auth/change-password`), `server/storage.ts` (`seedDemoUser` address fields + `deletePayoutAccount`), `server/requestRoutes.ts` (`DELETE /api/request-money/payout-accounts/:id`, `PATCH /api/request-money/payout-accounts/:id/default`)
@@ -202,7 +202,7 @@
 ### `DEC-2026-11-18-REMOVE-OVERVIEW-REDEMPTION-MODE-PILLS` — Remove `Pay less` / `Send more` Pills & Step 1 Caption on Overview + Sentence-Case `Redeem on send money` (`PD-05` / `BONUS-18`)
 - **Date Approved:** 18 November 2026 (`2026-11-18`)
 - **Decision Owner / Approver:** Mohammad Mumtaz (Product Owner — explicitly approved `PD-05` + Sentence-case `Redeem on send money` CTA)
-- **Status:** `Implemented (Awaiting Live UI Approval Gate for E2E Spec Sync)`
+- **Status:** `UI Approved by Product Owner (E2E Specs Synced — Pending Full E2E Suite Execution)`
 - **Affected Files (`Rhemito-UI`):**
   - `client/src/pages/Dashboard.tsx`
   - `client/src/__tests__/contracts/bonus.contract.test.ts` (`BONUS-18`)
@@ -211,5 +211,5 @@
      - Removed `dashboard-bonus-redemption-modes` (`Pay less` and `Send more` pills plus `"Pick on Step 1 of Send Money (used separately from Promo Codes)."` caption) and its left divider on Overview while keeping Zone A (earned balance, source pills, guardrails) and Zone B (`Redeem on send money` CTA + `Details in Reward$` link) intact.
      - Updated `dashboard-redeem-send-money-cta` button label from `Redeem on Send Money` to Sentence case `Redeem on send money` (`PD-04`), and removed the inline `· Soonest-expiring used first` note from the Overview guardrail row (`2026-11-18`).
   2. **Contract Sync (`bonus.contract.test.ts` — `BONUS-18`):**
-     - Updated `BONUS-18` to assert `expect(r2.view.queryByTestId("dashboard-bonus-redemption-modes")).toBeNull()` while preserving all balance, guardrail, referee strip, and `/send-money?reward=...` deep-link assertions (`tests/e2e/rewards_contract.spec.js` remains gated until live UI review).
+     - Updated `BONUS-18` in both `bonus.contract.test.ts` and `tests/e2e/rewards_contract.spec.js` to assert zero `dashboard-bonus-redemption-modes` pills and `Redeem on send money` on Overview while preserving all balance, guardrail, referee strip, and `/send-money?reward=...` deep-link assertions (following Product Owner live UI `approved` confirmation on `2026-11-18`).
   3. **Superseded Rule:** Earlier `BONUS-18` Overview requirement displaying `Pay less` / `Send more` pills inside `rewards-section-bonus-banners` superseded by `PD-05` (`2026-11-18`).

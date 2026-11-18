@@ -275,7 +275,7 @@ test.describe('Staging Payment Gateway & Recent Transactions Sorting E2E', () =>
         const statusView = page.getByTestId('payment-status-view');
         await expect(statusView).toBeVisible({ timeout: 10000 });
         await expect(statusView).toHaveAttribute('data-status-category', 'completed');
-        await expect(statusView).toContainText('Payment Successful');
+        await expect(statusView).toContainText('Payment successful');
         await expect(statusView).toContainText('TXN-CARD-PAID-1');
         await expect(statusView).toContainText('250.00');
         await expect(statusView).toContainText('Akshita Sharma');
@@ -414,7 +414,7 @@ test.describe('Staging Payment Gateway & Recent Transactions Sorting E2E', () =>
         const statusView = page.getByTestId('payment-status-view');
         await expect(statusView).toBeVisible({ timeout: 10000 });
         await expect(statusView).toHaveAttribute('data-status-category', 'completed');
-        await expect(statusView).toContainText('Payment Successful');
+        await expect(statusView).toContainText('Payment successful');
         await expect(statusView).toContainText('TXN-PBB-PAID-1');
 
         await expect(page).toHaveURL(/\/$/, { timeout: 12000 });

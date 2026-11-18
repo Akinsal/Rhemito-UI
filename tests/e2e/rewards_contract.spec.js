@@ -111,7 +111,7 @@ async function advanceFromAmountToPayment(page) {
     }
     await page.getByRole('button', { name: 'Continue' }).click();
     await page.getByText('Akshita', { exact: true }).first().click();
-    await expect(page.getByText('Recipient Details').first()).toBeVisible();
+    await expect(page.getByText('Recipient details').first()).toBeVisible();
     await page.getByRole('button', { name: 'Continue' }).click();
 }
 
@@ -164,7 +164,7 @@ test.describe('Rewards contract — bonus panel', () => {
     test('[BONUS-01] a balance in another currency does not show the bonus panel, on either step', async ({ page }) => {
         await mockRewards(page, { gbp: 0, usd: 50 });
         await openSendMoney(page, '500');
-        await expect(page.getByText('Send Money').first()).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Send money' })).toBeVisible();
         await expect(page.getByTestId('bonus-redemption')).toHaveCount(0);
         await expect(page.getByTestId('summary-bonus-step1')).toHaveCount(0);
         await advanceFromAmountToPayment(page);
@@ -330,8 +330,9 @@ test.describe('Rewards contract — Bonus & Discounts', () => {
 
     /**
      * CONTRACT BONUS-18: Dashboard surfaces the Earned Bonus & Quick Redeem card when bonus > 0, showing
-     * referee welcome attribution ("Invited by John Doe"), guardrails, Pay less / Send more modes, and a 1-click
-     * "Redeem on Send Money" CTA that navigates to /send-money?reward=referral with Step 1 bonus credit open.
+     * referee welcome attribution ("Invited by John Doe"), guardrails (without Step 1 redemption-mode pills on Overview
+     * per DEC-2026-11-18-REMOVE-OVERVIEW-REDEMPTION-MODE-PILLS), and a 1-click "Redeem on send money" CTA that navigates
+     * to /send-money?reward=referral with Step 1 bonus credit open.
      * WHY: newly invited referees must immediately see their welcome credit and redeem it in one click.
      * CODE: client/src/pages/Dashboard.tsx, client/src/pages/SendMoney.tsx.
      */
@@ -392,8 +393,9 @@ test.describe('Rewards contract — Bonus & Discounts', () => {
         await expect(card).toContainText('Min. transfer £50.00');
         await expect(card).toContainText('GBP → All corridors');
         await expect(card).toContainText('Expires 11/02/2027');
-        await expect(page.getByTestId('dashboard-bonus-redemption-modes')).toContainText('Pay less');
-        await expect(page.getByTestId('dashboard-bonus-redemption-modes')).toContainText('Send more');
+        await expect(page.getByTestId('dashboard-bonus-redemption-modes')).toHaveCount(0);
+        await expect(card).not.toContainText('Soonest-expiring used first');
+        await expect(page.getByTestId('dashboard-redeem-send-money-cta')).toContainText('Redeem on send money');
 
         await page.getByTestId('dashboard-redeem-send-money-cta').click();
         await expect(page).toHaveURL(/\/send-money\?reward=referral/);

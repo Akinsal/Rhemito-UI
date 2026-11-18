@@ -193,7 +193,7 @@ test.describe('Send Money — use your bonus', () => {
         await page.getByRole('radio', { name: /Pay less/ }).check();
         await page.getByRole('button', { name: 'Continue' }).click();
         await page.getByText('Akshita', { exact: true }).first().click();
-        await expect(page.getByText('Recipient Details').first()).toBeVisible();
+        await expect(page.getByText('Recipient details').first()).toBeVisible();
         await page.getByRole('button', { name: 'Continue' }).click();
         await page.getByText('Credit/Debit Card').click();
         await expect(page.getByText('Your bonus balance has changed. Please review your transfer.').first()).toBeVisible();

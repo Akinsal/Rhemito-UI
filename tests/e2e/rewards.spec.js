@@ -129,7 +129,7 @@ test.describe('Refer & Earn on the Dashboard', () => {
         data.wallet.balances = [];
         await mockRewards(page, data);
         await page.goto('/');
-        await expect(page.getByText('Quick Services')).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Quick service' })).toBeVisible();
         await expect(page.getByTestId('refer-earn-card')).toHaveCount(0);
         await expect(page.getByTestId('bonus-earned-pill')).toHaveCount(0);
         await expect(page.getByTestId('rewards-waiting-badge')).toHaveCount(0);
@@ -287,7 +287,7 @@ test.describe('Send Money — use your bonus', () => {
 
         await page.getByRole('button', { name: 'Continue' }).click();
         await page.getByText('Akshita', { exact: true }).first().click();
-        await expect(page.getByText('Recipient Details').first()).toBeVisible();
+        await expect(page.getByText('Recipient details').first()).toBeVisible();
         await page.getByRole('button', { name: 'Continue' }).click();
 
         await expect(page.getByTestId('summary-bonus')).toContainText('7.00');

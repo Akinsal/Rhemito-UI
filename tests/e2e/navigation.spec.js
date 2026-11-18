@@ -24,23 +24,27 @@ test.describe('Rhemito Navigation', () => {
         await expect(page).toHaveURL('/');
     });
 
-    test('Payments Received and Money Sent accordions are removed from sidebar', async ({ page }) => {
+    test('Payments Received and Money Sent accordions are removed from sidebar and retail items are visible', async ({ page }) => {
         await page.goto('/');
 
-        // Payments Received & Money Sent accordions are removed from sidebar.
+        // Legacy Payments Received & Money Sent accordions and top-bar How it works / Help links are removed
         await expect(page.getByText('Payments Received')).toHaveCount(0);
         await expect(page.getByText('Money Sent')).toHaveCount(0);
+        await expect(page.getByTestId('header-link-how-it-works')).toHaveCount(0);
+        await expect(page.getByTestId('header-link-help')).toHaveCount(0);
 
-        // Standalone main items are directly visible.
-        await expect(page.getByTestId('link-senders-&-recipients')).toBeVisible();
-        await expect(page.getByTestId('link-collections-accounts')).toBeVisible();
+        // Approved retail sidebar items are directly visible
+        await expect(page.getByTestId('link-recipients')).toBeVisible();
+        await expect(page.getByTestId('link-senders')).toBeVisible();
+        await expect(page.getByTestId('link-compliance')).toBeVisible();
+        await expect(page.getByTestId('link-settings')).toBeVisible();
     });
 
     test('Sidebar navigation - Senders & Recipients (main item)', async ({ page }) => {
         await page.goto('/');
 
-        // Senders & Recipients is a main sidebar entry — no accordion needed.
-        await page.getByTestId('link-senders-&-recipients').click();
+        // Senders is a main sidebar entry — no accordion needed.
+        await page.getByTestId('link-senders').click();
 
         // Verify navigation to the consolidated page; Senders is the default tab
         await expect(page).toHaveURL(/\/senders-recipients/);
@@ -73,17 +77,14 @@ test.describe('Rhemito Navigation', () => {
         await expect(page.getByTestId('panel-senders')).toBeVisible();
     });
 
-    test('Sidebar navigation - Settlement bank account (main item)', async ({ page }) => {
-        await page.goto('/');
+    test('Settlement bank account route and Sentence-case modals', async ({ page }) => {
+        await page.goto('/payout-accounts');
 
-        // Click Settlement bank account link (main item)
-        await page.getByTestId('link-settlement-bank-account').click();
-
-        // Verify navigation and page heading
+        // Verify navigation and Sentence-case page heading
         await expect(page).toHaveURL(/\/payout-accounts/);
         await expect(page.getByRole('heading', { name: 'Settlement bank account', exact: true })).toBeVisible();
 
-        // Verify "Add Payout Account" opens the popup modal
+        // Verify "Add Settlement Bank Account" opens the popup modal
         await page.getByTestId('button-open-add-payout-account').click();
         await expect(page.getByRole('dialog')).toBeVisible();
         await expect(page.getByRole('heading', { name: 'Add settlement bank account' })).toBeVisible();
@@ -116,24 +117,21 @@ test.describe('Rhemito Navigation', () => {
         await expect(page.getByTestId('section-transactions-page')).toBeVisible();
     });
 
-    test('Sidebar navigation - Invoices', async ({ page }) => {
-        await page.goto('/');
+    test('Dedicated Invoices management route', async ({ page }) => {
+        await page.goto('/invoices');
 
-        // Click Invoices link
-        await page.getByTestId('link-invoices').click();
-
-        // Verify navigation to the dedicated Invoices management page
+        // Verify dedicated Invoices management page elements
         await expect(page).toHaveURL(/\/invoices/);
         await expect(page.getByTestId('section-invoices-page')).toBeVisible();
         await expect(page.getByTestId('table-invoices')).toBeVisible();
         await expect(page.getByTestId('button-create-invoice')).toBeVisible();
     });
 
-    test('Sidebar navigation - Bonus & Discounts', async ({ page }) => {
+    test('Sidebar navigation - Reward$ (Bonus & Discounts)', async ({ page }) => {
         await page.goto('/');
 
-        // Click Bonus & Discounts link
-        await page.locator('a[href="/bonus-discounts"]').first().click();
+        // Click Reward$ link in sidebar
+        await page.getByTestId('link-reward').click();
 
         // Verify navigation
         await expect(page).toHaveURL(/\/bonus-discounts/);
