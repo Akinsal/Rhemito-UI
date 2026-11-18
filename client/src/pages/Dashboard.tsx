@@ -209,10 +209,6 @@ function SendMoneyRow({
       </TableCell>
       <TableCell className="text-[13px] font-medium text-slate-700 py-4">
         <div>{tx.recipient}</div>
-        <div className="mt-0.5 flex items-center gap-1.5 text-[10px] font-medium text-slate-400">
-          <span className={cn("w-1.5 h-1.5 rounded-full", TYPE_BADGES.send_money.dot)} />
-          {TYPE_BADGES.send_money.label}
-        </div>
       </TableCell>
       <TableCell className="text-slate-500 text-[13px] hidden md:table-cell py-4">
         <span>{tx.service}</span>
@@ -378,7 +374,6 @@ function UnifiedRow({
   onInvoiceCancel,
   resendingInvoiceId,
 }: UnifiedRowProps) {
-  const badge = TYPE_BADGES[row.type];
   const req = row.moneyRequest;
   const invoice = row.invoice;
   // Ghost icon action for the money-request/invoice rows — the same compact
@@ -436,11 +431,6 @@ function UnifiedRow({
       </TableCell>
       <TableCell className="text-[13px] font-medium text-slate-700 py-4">
         <div>{row.name}</div>
-        {row.email ? <div className="text-xs text-slate-400 mt-0.5">{row.email}</div> : null}
-        <div className="mt-0.5 flex items-center gap-1.5 text-[10px] font-medium text-slate-400">
-          <span className={cn("w-1.5 h-1.5 rounded-full", badge.dot)} />
-          {badge.label}
-        </div>
       </TableCell>
       <TableCell className="text-slate-500 text-[13px] hidden md:table-cell py-4">
         <span>{row.service}</span>
