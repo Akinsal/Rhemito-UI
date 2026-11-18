@@ -25,10 +25,37 @@ test.describe('Sidebar Transactions navigation & dedicated page', () => {
         await expect(page.getByTestId('chip-type-send-money')).toHaveClass(/bg-blue-600/);
         await expect(page.getByTestId('chip-type-all')).not.toHaveClass(/bg-blue-600/);
 
-        // Every visible row is a Send Money row
+        // Every visible row is a Send Money row (zero receive_money, invoice, or campaign rows)
         const rows = page.locator('[data-testid^="row-transaction-"], [data-testid^="row-scheduled-"]');
-        await expect(rows.filter({ hasNotText: 'Send Money' })).toHaveCount(0);
         await expect(rows.first()).toBeVisible();
+        await expect(page.locator('[data-testid^="row-receive_money-"], [data-testid^="row-invoice-"], [data-testid^="row-campaign-"]')).toHaveCount(0);
+    });
+
+    test('renders overview-aligned column headers, filter chips, amount format, and GMT date tooltip', async ({ page }) => {
+        await page.goto('/transactions');
+        await expect(page.getByTestId('table-transactions')).toBeVisible();
+
+        // 7 Sentence-case column headers matching Overview
+        const headers = page.locator('[data-testid="table-transactions"] thead th');
+        await expect(headers).toHaveText(['Order no', 'Date', 'Name', 'Service', 'Amount', 'Status', 'Actions']);
+
+        // Sentence-case filter chips
+        await expect(page.getByTestId('chip-type-all')).toContainText('All');
+        await expect(page.getByTestId('chip-type-send-money')).toContainText('Send money');
+        await expect(page.getByTestId('chip-type-receive-money')).toContainText('Receive money');
+        await expect(page.getByTestId('chip-type-invoice')).toContainText('Invoices');
+        await expect(page.getByTestId('chip-type-campaign')).toContainText('Campaigns');
+
+        // Amount format <Symbol> <2dp> (e.g. £ 100.00)
+        const amountCells = page.locator('[data-testid="table-transactions"] tbody td:nth-child(5)');
+        await expect(amountCells.first()).toBeVisible();
+        await expect(amountCells.first()).toHaveText(/^[£$€¥A-Z]{1,3}\s+\d+\.\d{2}$/);
+
+        // Hover date cell triggers HH:mm GMT tooltip
+        const dateTrigger = page.locator('[data-testid="table-transactions"] tbody td:nth-child(2) span').first();
+        await expect(dateTrigger).toBeVisible();
+        await dateTrigger.hover();
+        await expect(page.locator('[role="tooltip"]')).toContainText(/GMT/);
     });
 
     test('switching type filter chips on /transactions updates visible rows', async ({ page }) => {

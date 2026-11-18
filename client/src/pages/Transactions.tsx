@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, type ReactNode } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useQuery } from "@tanstack/react-query";
@@ -14,7 +14,8 @@ import {
   Copy,
   FilePlus2,
   Receipt,
-  MoreHorizontal,
+  MoreVertical,
+  X,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -33,6 +34,8 @@ import { cancelRequest, getRequests, resendEmail, type MoneyRequestView } from "
 import { invoiceListUrl, resendInvoiceNotificationRequest, type InvoiceListItem, type InvoiceListResponse } from "@/lib/invoices";
 import { fetchCampaigns } from "@/lib/groupPay";
 import { cancelSendMoneyTransaction, getSendMoneyTransactions, toSendMoneyRow } from "@/lib/sendMoney";
+import { CURRENCY_SYMBOLS } from "@shared/currencies";
+import { formatAccountAmount } from "@/data/collectionAccounts";
 import {
   TYPE_BADGES,
   fromCampaign,
@@ -61,6 +64,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Tooltip,
   TooltipContent,
@@ -94,8 +98,8 @@ const TRANSACTIONS_PAGE_SIZE = 20;
 
 const TYPE_FILTERS: { value: TypeFilter; label: string }[] = [
   { value: "all", label: "All" },
-  { value: "send_money", label: "Send Money" },
-  { value: "receive_money", label: "Receive Money" },
+  { value: "send_money", label: "Send money" },
+  { value: "receive_money", label: "Receive money" },
   { value: "invoice", label: "Invoices" },
   { value: "campaign", label: "Campaigns" },
 ];
@@ -104,7 +108,103 @@ type MergedRow =
   | { kind: "send_money"; scheduled: boolean; dateSort: number; tx: SendMoneyTx }
   | { kind: "receive_money" | "invoice" | "campaign"; dateSort: number; row: UnifiedTransactionRow };
 
-function SendMoneyRow({ tx, scheduled, onCancel, onReceipt }: { tx: SendMoneyTx; scheduled: boolean; onCancel: (tx: SendMoneyTx) => void; onReceipt: (tx: SendMoneyTx) => void }) {
+function formatGmtTime24(timestampMs: number, dateLabel: string): string | null {
+  if (!dateLabel || dateLabel === "—") return null;
+  const ms = timestampMs > 0 ? timestampMs : Date.parse(`${dateLabel} 00:00:00 GMT`);
+  if (!Number.isFinite(ms) || ms <= 0) return null;
+  const d = new Date(ms);
+  const hh = String(d.getUTCHours()).padStart(2, "0");
+  const mm = String(d.getUTCMinutes()).padStart(2, "0");
+  return `${hh}:${mm} GMT`;
+}
+
+function formatDashboardAmount(rawAmount: string): string {
+  const codeMatch = rawAmount.match(/\b([A-Z]{3})\b/);
+  const code = codeMatch?.[1];
+  let symbol = code ? CURRENCY_SYMBOLS[code] : undefined;
+  if (!symbol && code) {
+    try {
+      const parts = new Intl.NumberFormat("en-GB", {
+        style: "currency",
+        currency: code,
+        currencyDisplay: "narrowSymbol",
+      }).formatToParts(0);
+      symbol = parts.find((p) => p.type === "currency")?.value;
+    } catch {
+      symbol = undefined;
+    }
+  }
+  const numMatch = rawAmount.replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
+  if (!numMatch) return rawAmount;
+  const formattedNum = formatAccountAmount(Number(numMatch[0]));
+  return symbol ? `${symbol} ${formattedNum}` : formattedNum;
+}
+
+function DateCellWithGmtTooltip({ dateLabel, timestampMs }: { dateLabel: string; timestampMs: number }) {
+  const gmtTime = formatGmtTime24(timestampMs, dateLabel);
+  if (!gmtTime) {
+    return <span>{dateLabel}</span>;
+  }
+  return (
+    <Tooltip delayDuration={150}>
+      <TooltipTrigger asChild>
+        <span
+          tabIndex={0}
+          className="cursor-default border-b border-dotted border-transparent hover:border-slate-400 transition-colors focus-visible:outline-none"
+        >
+          {dateLabel}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent
+        side="top"
+        className="bg-foreground text-background px-2.5 py-1 text-xs font-medium shadow-sm tabular-nums"
+      >
+        {gmtTime}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function OrderNoCell({ orderNo }: { orderNo: string }) {
+  const compact = orderNo.length > 2 ? `${orderNo.slice(0, 2)}...` : orderNo;
+  return (
+    <>
+      <span className="hidden @4xl:inline tracking-tight whitespace-nowrap">
+        {orderNo}
+      </span>
+      <Tooltip delayDuration={150}>
+        <TooltipTrigger asChild>
+          <span
+            tabIndex={0}
+            className="inline @4xl:hidden tracking-tight whitespace-nowrap cursor-default border-b border-dotted border-transparent hover:border-slate-400 transition-colors focus-visible:outline-none"
+          >
+            {compact}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent
+          side="top"
+          className="bg-foreground text-background px-2.5 py-1 text-xs font-medium shadow-sm tabular-nums"
+        >
+          {orderNo}
+        </TooltipContent>
+      </Tooltip>
+    </>
+  );
+}
+
+function SendMoneyRow({
+  tx,
+  dateSort,
+  scheduled,
+  onCancel,
+  onReceipt,
+}: {
+  tx: SendMoneyTx;
+  dateSort: number;
+  scheduled: boolean;
+  onCancel: (tx: SendMoneyTx) => void;
+  onReceipt: (tx: SendMoneyTx) => void;
+}) {
   const TERMINAL_STATUSES = ["completed", "failed", "cancelled"] as const;
   const isTerminal = (TERMINAL_STATUSES as readonly string[]).includes(tx.status);
   const canCancel = tx.status === "awaiting_payment";
@@ -113,34 +213,38 @@ function SendMoneyRow({ tx, scheduled, onCancel, onReceipt }: { tx: SendMoneyTx;
     <TableRow
       data-testid={scheduled ? `row-scheduled-${tx.id}` : `row-transaction-${tx.id}`}
       className={cn(
-        "hover:bg-blue-50/50 transition-colors duration-200 group border-b border-gray-50 last:border-b-0",
-        tx.status === "awaiting_payment" && "border-l-2 border-l-amber-400"
+        "hover:bg-slate-50/80 transition-colors duration-150 group border-b border-slate-100 last:border-b-0",
+        tx.status === "awaiting_payment" && "border-l-2 border-l-amber-400 bg-amber-50/15"
       )}
     >
-      <TableCell className="font-semibold text-blue-600 text-sm py-4 pl-4 sm:pl-6">
-        <div>{tx.id}</div>
-        <div className="text-xs font-bold text-gray-900 mt-0.5 sm:hidden">{tx.amount}</div>
+      <TableCell className="text-[13px] font-medium text-slate-700 py-4 pl-4 sm:pl-6">
+        <div className="flex items-center gap-2.5">
+          <span className="w-5 h-5 rounded-full border border-blue-500 text-blue-600 flex items-center justify-center shrink-0">
+            <ArrowUpRight className="w-3 h-3" aria-hidden />
+          </span>
+          <OrderNoCell orderNo={tx.id} />
+        </div>
+        <div className="text-xs font-bold text-gray-900 mt-0.5 sm:hidden pl-7 tabular-nums">
+          {formatDashboardAmount(tx.amount)}
+        </div>
       </TableCell>
-      <TableCell className="text-sm font-medium text-gray-900 py-4">
+      <TableCell className="text-slate-500 text-[13px] hidden sm:table-cell py-4">
+        <DateCellWithGmtTooltip dateLabel={tx.date} timestampMs={dateSort} />
+      </TableCell>
+      <TableCell className="text-[13px] font-medium text-slate-700 py-4">
         <div>{tx.recipient}</div>
-        <div className="mt-1 flex items-center gap-1.5 text-[10px] font-medium text-gray-500">
-          <span className={cn("w-1.5 h-1.5 rounded-full", TYPE_BADGES.send_money.dot)} />
-          {TYPE_BADGES.send_money.label}
-        </div>
       </TableCell>
-      <TableCell className="text-gray-500 text-sm hidden md:table-cell py-4">{tx.service}</TableCell>
-      <TableCell className="text-gray-500 text-sm hidden sm:table-cell py-4">{tx.date}</TableCell>
-      <TableCell className="text-right font-bold text-gray-900 text-sm py-4 hidden sm:table-cell">
-        <div className="flex items-center justify-end gap-1">
-          <ArrowUpRight className="w-3.5 h-3.5 text-gray-400" aria-hidden />
-          {tx.amount}
-        </div>
+      <TableCell className="text-slate-500 text-[13px] hidden md:table-cell py-4">
+        <span>{tx.service}</span>
+      </TableCell>
+      <TableCell className="text-slate-600 text-[13px] font-normal py-4 hidden sm:table-cell">
+        <span className="tabular-nums whitespace-nowrap">{formatDashboardAmount(tx.amount)}</span>
       </TableCell>
       <TableCell className="text-center py-4">
         {scheduled ? (
           <div className="flex items-center justify-center gap-2">
-            <span title="Scheduled" className="status-light inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+            <span title="Scheduled" className="status-light inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-[#a79032] border border-amber-200 shadow-2xs">
+              <span className="w-2 h-2 rounded-full bg-[#a79032] animate-pulse" />
               Scheduled
             </span>
           </div>
@@ -148,51 +252,68 @@ function SendMoneyRow({ tx, scheduled, onCancel, onReceipt }: { tx: SendMoneyTx;
           <div className="flex items-center justify-center gap-2">
             <AnimatePresence mode="wait">
               {tx.status === "cancelled" ? (
-                <motion.span title="Cancelled"
+                <motion.span
+                  title="Cancelled"
                   key="cancelled"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="status-light inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.2 }}
+                  className="status-light inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-[#850707] border border-red-200 shadow-2xs"
                 >
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                  <span className="w-2 h-2 rounded-full bg-[#850707]" />
                   Cancelled
                 </motion.span>
-              ) : tx.status === "completed" ? (
-                <motion.span title="Completed"
-                  key="completed"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="status-light inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"
+              ) : tx.status === "failed" ? (
+                <motion.span
+                  title="Failed"
+                  key="failed"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.2 }}
+                  className="status-light inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-[#850707] border border-red-200 shadow-2xs"
                 >
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  <span className="w-2 h-2 rounded-full bg-[#850707]" />
+                  Failed
+                </motion.span>
+              ) : tx.status === "completed" ? (
+                <motion.span
+                  title="Completed"
+                  key="completed"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.2 }}
+                  className="status-light inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-[#019b3e] border border-emerald-200 shadow-2xs"
+                >
+                  <span className="w-2 h-2 rounded-full bg-[#019b3e]" />
                   Completed
                 </motion.span>
               ) : tx.status === "awaiting_payment" ? (
-                <motion.span title="Awaiting Payment"
+                <motion.span
+                  title="Awaiting Payment"
                   key="awaiting_payment"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="status-light inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.2 }}
+                  className="status-light inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-orange-50 text-[#ff7013] border border-orange-200 shadow-2xs"
                 >
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  <span className="w-2 h-2 rounded-full bg-[#ff7013]" />
                   Awaiting Payment
                 </motion.span>
               ) : (
-                <motion.span title="Pending"
+                <motion.span
+                  title="Pending"
                   key="pending"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="status-light inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.2 }}
+                  className="status-light inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-[#a79032] border border-amber-200 shadow-2xs"
                 >
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  <span className="w-2 h-2 rounded-full bg-[#a79032]" />
                   Pending
                 </motion.span>
               )}
@@ -201,77 +322,85 @@ function SendMoneyRow({ tx, scheduled, onCancel, onReceipt }: { tx: SendMoneyTx;
         )}
       </TableCell>
       <TableCell className="text-center py-4 px-8 sm:px-10">
-        {scheduled ? (
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-8 px-4 text-xs font-medium rounded-lg border-gray-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all"
-            data-testid={`button-cancel-${tx.id}`}
-          >
-            Cancel
-          </Button>
-        ) : (
-          (() => {
-            if (!isTerminal && !canCancel && !tx.receipt) {
-              return <span className="text-gray-300 text-sm">—</span>;
-            }
-            return (
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-1.5 sm:gap-2">
-                {tx.receipt && (
+        <div className="relative inline-flex items-center justify-center">
+          {scheduled ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 w-[88px] px-0 text-xs font-semibold rounded-full border-[#b10909] text-[#b10909] hover:bg-red-50 hover:text-[#b10909] transition-all active:scale-95"
+              data-testid={`button-cancel-${tx.id}`}
+            >
+              Cancel
+            </Button>
+          ) : !isTerminal && !canCancel ? (
+            <span className="inline-flex h-7 w-[88px] items-center justify-center text-gray-300 text-sm">—</span>
+          ) : isTerminal ? (
+            <Button
+              size="sm"
+              className="bg-[#2e5bff] hover:bg-blue-700 text-white h-7 w-[88px] px-0 text-xs font-semibold rounded-full shadow-2xs transition-all active:scale-95"
+              data-testid={`button-resend-${tx.id}`}
+            >
+              Resend
+            </Button>
+          ) : (
+            <AnimatePresence>
+              {canCancel && (
+                <motion.div
+                  key={`cancel-btn-${tx.id}`}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={{ duration: 0.15 }}
+                >
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-8 w-full sm:w-auto px-4 text-xs font-medium rounded-lg border-slate-200 text-slate-700 hover:bg-slate-50 active:scale-95"
+                    className={cn(
+                      "h-7 w-[88px] px-0 text-xs font-semibold rounded-full",
+                      "text-[#b10909] border border-[#b10909] bg-white",
+                      "hover:bg-red-50 hover:border-red-700 hover:text-red-700",
+                      "active:bg-red-100 active:border-red-800",
+                      "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400",
+                      "transition-colors duration-150"
+                    )}
+                    aria-label={`Cancel transaction ${tx.id}`}
+                    data-testid={`button-cancel-${tx.id}`}
+                    onClick={() => onCancel(tx)}
+                  >
+                    Cancel
+                  </Button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          )}
+          {tx.receipt && (
+            <div className="absolute left-full ml-1.5 flex items-center">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900 data-[state=open]:bg-slate-100 data-[state=open]:text-slate-900 transition-colors cursor-pointer"
+                    aria-label={`More actions for ${tx.id}`}
+                    data-testid={`button-actions-more-${tx.id}`}
+                  >
+                    <MoreVertical className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48 rounded-xl p-1.5 shadow-lg border-slate-200/90">
+                  <DropdownMenuItem
                     data-testid={`button-receipt-${tx.id}`}
                     onClick={() => onReceipt(tx)}
+                    className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium text-slate-700 cursor-pointer"
                   >
-                    <Receipt className="w-3.5 h-3.5 mr-1" />
-                    Receipt
-                  </Button>
-                )}
-                {isTerminal && (
-                  <Button
-                    size="sm"
-                    className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white h-8 w-full sm:w-auto px-4 text-xs font-medium rounded-lg shadow-sm hover:shadow-md transition-all"
-                    data-testid={`button-resend-${tx.id}`}
-                  >
-                    Resend
-                  </Button>
-                )}
-                <AnimatePresence>
-                  {canCancel && (
-                    <motion.div
-                      key={`cancel-btn-${tx.id}`}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="w-full sm:w-auto"
-                    >
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className={cn(
-                          "h-8 w-full sm:w-auto px-4 text-xs font-medium rounded-full",
-                          "text-red-500 border border-red-200 bg-transparent",
-                          "hover:bg-red-50 hover:border-red-300 hover:text-red-600",
-                          "active:bg-red-100 active:border-red-400",
-                          "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400",
-                          "transition-colors duration-150"
-                        )}
-                        aria-label={`Cancel transaction ${tx.id}`}
-                        data-testid={`button-cancel-${tx.id}`}
-                        onClick={() => onCancel(tx)}
-                      >
-                        Cancel
-                      </Button>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            );
-          })()
-        )}
+                    <Receipt className="w-4 h-4 text-slate-500" />
+                    <span>View receipt</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
+        </div>
       </TableCell>
     </TableRow>
   );
@@ -300,72 +429,46 @@ function UnifiedRow({
   onInvoiceCancel,
   resendingInvoiceId,
 }: UnifiedRowProps) {
-  const badge = TYPE_BADGES[row.type];
   const req = row.moneyRequest;
   const invoice = row.invoice;
-
-  const iconAction = (
-    title: string,
-    testid: string,
-    destructive: boolean,
-    disabled: boolean,
-    onClick: () => void,
-    children: ReactNode,
-  ) => (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={disabled}
-          className={cn(
-            "h-8 w-8 p-0 transition-colors",
-            destructive
-              ? "text-red-600 hover:bg-red-50 hover:text-red-700"
-              : "text-gray-500 hover:bg-blue-50 hover:text-blue-600",
-          )}
-          aria-label={title}
-          data-testid={testid}
-          onClick={onClick}
-        >
-          {children}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="top">
-        <p>{title}</p>
-      </TooltipContent>
-    </Tooltip>
-  );
 
   return (
     <TableRow
       data-testid={`row-${row.type}-${row.ref}`}
-      className="hover:bg-blue-50/50 transition-colors duration-200 group border-b border-gray-50 last:border-b-0"
+      className="hover:bg-slate-50/80 transition-colors duration-150 group border-b border-slate-100 last:border-b-0"
     >
-      <TableCell className="font-semibold text-blue-600 text-sm py-4 pl-4 sm:pl-6">
-        <div>{row.ref}</div>
-        <div className="text-xs font-bold text-gray-900 mt-0.5 sm:hidden">{row.amountLabel}</div>
+      <TableCell className="text-[13px] font-medium text-slate-700 py-4 pl-4 sm:pl-6">
+        <div className="flex items-center gap-2.5">
+          <span className="w-5 h-5 rounded-full border border-blue-500 text-blue-600 flex items-center justify-center shrink-0">
+            <ArrowDownLeft className="w-3 h-3" aria-hidden />
+          </span>
+          <OrderNoCell orderNo={row.ref} />
+        </div>
+        <div className="text-xs font-bold text-gray-900 mt-0.5 sm:hidden pl-7 tabular-nums">
+          {formatDashboardAmount(row.amountLabel)}
+        </div>
       </TableCell>
-      <TableCell className="text-sm font-medium text-gray-900 py-4">
+      <TableCell className="text-slate-500 text-[13px] hidden sm:table-cell py-4">
+        <DateCellWithGmtTooltip dateLabel={row.dateLabel} timestampMs={row.dateSort} />
+      </TableCell>
+      <TableCell className="text-[13px] font-medium text-slate-700 py-4">
         <div>{row.name}</div>
-        {row.email ? <div className="text-xs text-gray-400 mt-0.5">{row.email}</div> : null}
-        <div className="mt-1 flex items-center gap-1.5 text-[10px] font-medium text-gray-500">
-          <span className={cn("w-1.5 h-1.5 rounded-full", badge.dot)} />
-          {badge.label}
-        </div>
       </TableCell>
-      <TableCell className="text-gray-500 text-sm hidden md:table-cell py-4">{row.service}</TableCell>
-      <TableCell className="text-gray-500 text-sm hidden sm:table-cell py-4">{row.dateLabel}</TableCell>
-      <TableCell className="text-right font-bold text-gray-900 text-sm py-4 hidden sm:table-cell">
-        <div className="flex items-center justify-end gap-1">
-          <ArrowDownLeft className="w-3.5 h-3.5 text-teal-500" aria-hidden />
-          {row.amountLabel}
-        </div>
-        {row.subNote ? <div className="text-xs font-normal text-gray-400 mt-0.5">{row.subNote}</div> : null}
+      <TableCell className="text-slate-500 text-[13px] hidden md:table-cell py-4">
+        <span>{row.service}</span>
+      </TableCell>
+      <TableCell className="text-slate-600 text-[13px] font-normal py-4 hidden sm:table-cell">
+        <span className="tabular-nums whitespace-nowrap">{formatDashboardAmount(row.amountLabel)}</span>
       </TableCell>
       <TableCell className="text-center py-4">
         <div className="flex items-center justify-center gap-2">
-          <span title={row.statusLabel} className={cn("status-light inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border", row.statusClass)}>
+          <span
+            title={row.statusLabel}
+            className={cn(
+              "status-light inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border shadow-2xs",
+              row.statusClass
+            )}
+          >
             <span className={cn("w-1.5 h-1.5 rounded-full", row.dotClass)} />
             {row.statusLabel}
           </span>
@@ -393,7 +496,7 @@ function UnifiedRow({
                     aria-label={`More actions for ${row.ref}`}
                     data-testid={`button-actions-more-${row.ref}`}
                   >
-                    <MoreHorizontal className="w-4 h-4" />
+                    <MoreVertical className="w-4 h-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48 rounded-xl p-1.5 shadow-lg border-slate-200/90">
@@ -522,32 +625,37 @@ function MobileSendMoneyCard({
         </div>
 
         <div className="text-right shrink-0 flex flex-col items-end gap-1">
-          <span className="font-bold text-base text-slate-900 tracking-tight whitespace-nowrap">
-            {tx.amount}
+          <span className="font-bold text-base text-slate-900 tracking-tight whitespace-nowrap tabular-nums">
+            {formatDashboardAmount(tx.amount)}
           </span>
           {scheduled ? (
-            <span title="Scheduled" className="status-light inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+            <span title="Scheduled" className="status-light inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-[#a79032] border border-amber-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#a79032] animate-pulse" />
               Scheduled
             </span>
           ) : tx.status === "cancelled" ? (
-            <span title="Cancelled" className="status-light inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-red-50 text-red-700 border border-red-200">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+            <span title="Cancelled" className="status-light inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-red-50 text-[#850707] border border-red-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#850707]" />
               Cancelled
             </span>
+          ) : tx.status === "failed" ? (
+            <span title="Failed" className="status-light inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-red-50 text-[#850707] border border-red-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#850707]" />
+              Failed
+            </span>
           ) : tx.status === "completed" ? (
-            <span title="Completed" className="status-light inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            <span title="Completed" className="status-light inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-[#019b3e] border border-emerald-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#019b3e]" />
               Completed
             </span>
           ) : tx.status === "awaiting_payment" ? (
-            <span title="Awaiting Payment" className="status-light inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+            <span title="Awaiting Payment" className="status-light inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-orange-50 text-[#ff7013] border border-orange-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#ff7013]" />
               Awaiting Payment
             </span>
           ) : (
-            <span title="Pending" className="status-light inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+            <span title="Pending" className="status-light inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-[#a79032] border border-amber-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#a79032]" />
               Pending
             </span>
           )}
@@ -560,7 +668,7 @@ function MobileSendMoneyCard({
             <Button
               size="sm"
               variant="outline"
-              className="h-8 px-4 text-xs font-medium rounded-lg border-slate-200 text-red-600 hover:bg-red-50 hover:border-red-200 active:scale-95 transition-all w-full"
+              className="h-8 px-4 text-xs font-semibold rounded-full border-[#b10909] text-[#b10909] hover:bg-red-50 hover:text-[#b10909] active:scale-95 transition-all w-full"
               data-testid={`button-cancel-${tx.id}`}
             >
               Cancel
@@ -571,7 +679,7 @@ function MobileSendMoneyCard({
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-8 flex-1 text-xs font-medium rounded-lg border-slate-200 text-slate-700 hover:bg-slate-50 active:scale-95"
+                  className="h-8 flex-1 text-xs font-medium rounded-full border-slate-200 text-slate-700 hover:bg-slate-50 active:scale-95"
                   data-testid={`button-receipt-${tx.id}`}
                   onClick={() => onReceipt(tx)}
                 >
@@ -582,7 +690,7 @@ function MobileSendMoneyCard({
               {isTerminal && (
                 <Button
                   size="sm"
-                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white h-8 flex-1 text-xs font-medium rounded-lg shadow-sm transition-all active:scale-95"
+                  className="bg-[#2e5bff] hover:bg-blue-700 text-white h-8 flex-1 text-xs font-semibold rounded-full shadow-2xs transition-all active:scale-95"
                   data-testid={`button-resend-${tx.id}`}
                 >
                   Resend
@@ -592,7 +700,7 @@ function MobileSendMoneyCard({
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-8 flex-1 text-xs font-medium rounded-lg text-red-500 border border-red-200 bg-white hover:bg-red-50 hover:border-red-300 hover:text-red-600 active:scale-95 transition-all"
+                  className="h-8 flex-1 text-xs font-semibold rounded-full text-[#b10909] border border-[#b10909] bg-white hover:bg-red-50 hover:border-red-700 hover:text-red-700 active:scale-95 transition-all"
                   data-testid={`button-cancel-${tx.id}`}
                   onClick={() => onCancel(tx)}
                 >
@@ -653,10 +761,16 @@ function MobileUnifiedCard({
         </div>
 
         <div className="text-right shrink-0 flex flex-col items-end gap-1">
-          <span className="font-bold text-base text-slate-900 tracking-tight whitespace-nowrap">
-            {row.amountLabel}
+          <span className="font-bold text-base text-slate-900 tracking-tight whitespace-nowrap tabular-nums">
+            {formatDashboardAmount(row.amountLabel)}
           </span>
-          <span title={row.statusLabel} className={cn("status-light inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium border shadow-2xs", row.statusClass)}>
+          <span
+            title={row.statusLabel}
+            className={cn(
+              "status-light inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium border shadow-2xs",
+              row.statusClass
+            )}
+          >
             <span className={cn("w-1.5 h-1.5 rounded-full", row.dotClass)} />
             {row.statusLabel}
           </span>
@@ -666,7 +780,7 @@ function MobileUnifiedCard({
       <div className="pt-2.5 border-t border-slate-100 flex items-center gap-2 flex-wrap justify-end">
         <Button
           size="sm"
-          className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white h-8 px-4 text-xs font-medium rounded-lg shadow-sm transition-all active:scale-95"
+          className="bg-blue-600 hover:bg-blue-700 text-white h-8 px-4 text-xs font-medium rounded-full shadow-2xs transition-all active:scale-95"
           data-testid={`button-view-${row.ref}`}
           onClick={() => (req ? onRequestDetails(req) : onView(row.viewHref))}
         >
@@ -677,7 +791,7 @@ function MobileUnifiedCard({
           <Button
             size="sm"
             variant="outline"
-            className="h-8 px-3 text-xs font-medium rounded-lg text-slate-700 hover:bg-slate-50 border-slate-200 active:scale-95"
+            className="h-8 px-3 text-xs font-medium rounded-full text-slate-700 hover:bg-slate-50 border-slate-200 active:scale-95"
             data-testid={`button-resend-${row.ref}`}
             onClick={() => onRequestResend(req)}
           >
@@ -690,7 +804,7 @@ function MobileUnifiedCard({
           <Button
             size="sm"
             variant="outline"
-            className="h-8 px-3 text-xs font-medium rounded-lg text-blue-600 hover:bg-blue-50 border-blue-200 active:scale-95"
+            className="h-8 px-3 text-xs font-medium rounded-full text-blue-600 hover:bg-blue-50 border-blue-200 active:scale-95"
             data-testid={`button-copy-link-${row.ref}`}
             onClick={() => onRequestCopyLink(req)}
           >
@@ -703,7 +817,7 @@ function MobileUnifiedCard({
           <Button
             size="sm"
             variant="outline"
-            className="h-8 px-3 text-xs font-medium rounded-lg text-red-600 hover:bg-red-50 border-red-200 active:scale-95"
+            className="h-8 px-3 text-xs font-medium rounded-full text-red-600 hover:bg-red-50 border-red-200 active:scale-95"
             data-testid={`button-cancel-${row.ref}`}
             onClick={() => onRequestCancel(req)}
           >
@@ -716,7 +830,7 @@ function MobileUnifiedCard({
           <Button
             size="sm"
             variant="outline"
-            className="h-8 px-3 text-xs font-medium rounded-lg text-slate-700 hover:bg-slate-50 border-slate-200 active:scale-95"
+            className="h-8 px-3 text-xs font-medium rounded-full text-slate-700 hover:bg-slate-50 border-slate-200 active:scale-95"
             data-testid={`button-resend-${row.ref}`}
             disabled={resendingInvoiceId === invoice.id}
             onClick={() => onInvoiceResend(invoice)}
@@ -730,7 +844,7 @@ function MobileUnifiedCard({
           <Button
             size="sm"
             variant="outline"
-            className="h-8 px-3 text-xs font-medium rounded-lg text-red-600 hover:bg-red-50 border-red-200 active:scale-95"
+            className="h-8 px-3 text-xs font-medium rounded-full text-red-600 hover:bg-red-50 border-red-200 active:scale-95"
             data-testid={`button-cancel-${row.ref}`}
             onClick={() => onInvoiceCancel(invoice)}
           >
@@ -743,7 +857,7 @@ function MobileUnifiedCard({
           <Button
             variant="outline"
             size="sm"
-            className="h-8 px-3 text-xs font-medium rounded-lg border-gray-200 hover:border-blue-300 hover:text-blue-600 active:scale-95"
+            className="h-8 px-3 text-xs font-medium rounded-full border-gray-200 hover:border-blue-300 hover:text-blue-600 active:scale-95"
             data-testid={`button-create-new-${row.ref}`}
             onClick={() => onView("/send-invoice")}
           >
@@ -778,12 +892,14 @@ export default function Transactions() {
   const requestsQuery = useQuery({
     queryKey: ["/api/request-money/requests", user?.id ?? "demo"],
     queryFn: getRequests,
+    enabled: !isAuthLoading,
     refetchOnMount: "always",
     refetchInterval: 5000,
   });
   const sendMoneyQuery = useQuery({
     queryKey: ["/api/send-money/transactions", user?.id ?? "demo"],
     queryFn: getSendMoneyTransactions,
+    enabled: !isAuthLoading,
     refetchOnMount: "always",
     refetchInterval: 5000,
   });
@@ -793,12 +909,14 @@ export default function Transactions() {
       const res = await apiRequest("GET", invoiceListUrl({}));
       return ((await res.json()) as InvoiceListResponse).data;
     },
+    enabled: !isAuthLoading,
     refetchOnMount: "always",
     refetchInterval: 5000,
   });
   const campaignsQuery = useQuery({
     queryKey: ["/api/group-pay/campaigns", user?.id ?? "demo"],
     queryFn: fetchCampaigns,
+    enabled: !isAuthLoading,
     refetchOnMount: "always",
     refetchInterval: 5000,
   });
@@ -815,7 +933,12 @@ export default function Transactions() {
         };
       }),
       ...(isDemoUser
-        ? scheduledTransactions.map((tx) => ({ kind: "send_money" as const, scheduled: true, dateSort: Date.parse(tx.date) || 0, tx }))
+        ? scheduledTransactions.map((tx) => ({
+            kind: "send_money" as const,
+            scheduled: true,
+            dateSort: Date.parse(`${tx.date} 00:00:00 GMT`) || 0,
+            tx,
+          }))
         : []),
     ];
     const moneyInRows: MergedRow[] = [
@@ -981,21 +1104,23 @@ export default function Transactions() {
         onOpenChange={(open) => { if (!open) setInvoiceToCancel(null); }}
       />
 
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="space-y-5 md:space-y-6">
         <motion.div
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.25 }}
           data-testid="section-transactions-page"
         >
-          <Card className="border-gray-100/80 shadow-xl shadow-gray-100/50 overflow-hidden bg-white">
+          <Card className="@container rounded-2xl border border-[#efefee] bg-white shadow-[-2px_4px_16px_0px_rgba(0,0,0,0.04)] overflow-hidden">
             <CardContent className="p-0">
               <div>
                 {/* Header with Title and Search Bar */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 md:px-6 pt-5 md:pt-6 pb-4 border-b border-gray-100 bg-white">
-                  <h1 className="font-display font-bold text-lg md:text-xl text-gray-900">Transactions</h1>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 md:px-6 pt-5 pb-3">
+                  <h1 className="font-display font-bold text-base md:text-lg text-[#605e5c] tracking-tight">
+                    Transactions
+                  </h1>
                   <div className="relative w-full sm:w-80">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                     <Input
                       value={search}
                       onChange={(e) => {
@@ -1003,14 +1128,27 @@ export default function Transactions() {
                         setPage(1);
                       }}
                       placeholder="Search by ref, name, email or service…"
-                      className="pl-9 h-10 text-sm rounded-xl bg-gray-50/50 border-gray-200 focus:bg-white transition-all"
+                      className="pl-9 pr-8 h-9 text-xs sm:text-sm rounded-full border-slate-200 bg-slate-50/60 focus:bg-white transition-all"
                       data-testid="input-search-transactions"
                     />
+                    {search && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearch("");
+                          setPage(1);
+                        }}
+                        aria-label="Clear search"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition-colors cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
 
-                {/* Filter Pills */}
-                <div className="flex flex-wrap items-center gap-2 px-4 md:px-6 py-3.5 border-b border-gray-100 bg-gray-50/30">
+                {/* Filter Chips */}
+                <div className="flex items-center gap-2 px-4 sm:px-6 py-2.5 border-b border-slate-100 overflow-x-auto no-scrollbar scroll-smooth">
                   {TYPE_FILTERS.map((filter) => (
                     <button
                       key={filter.value}
@@ -1021,17 +1159,21 @@ export default function Transactions() {
                       }}
                       data-testid={`chip-type-${filter.value.replace(/_/g, "-")}`}
                       className={cn(
-                        "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-all duration-150",
+                        "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-all active:scale-95 shrink-0 whitespace-nowrap cursor-pointer",
                         typeFilter === filter.value
-                          ? "bg-blue-600 text-white border-blue-600 shadow-sm"
-                          : "bg-white text-gray-600 border-gray-200 hover:border-blue-300 hover:text-blue-600"
+                          ? "bg-blue-600 text-white border-blue-600 shadow-2xs"
+                          : "bg-white text-slate-600 border-slate-200 hover:border-blue-300 hover:text-blue-600"
                       )}
                     >
                       {filter.label}
-                      <span className={cn(
-                        "rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                        typeFilter === filter.value ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"
-                      )}>
+                      <span
+                        className={cn(
+                          "rounded-full px-1.5 py-px text-[10px] font-semibold",
+                          typeFilter === filter.value
+                            ? "bg-white/20 text-white"
+                            : "bg-slate-100 text-slate-500"
+                        )}
+                      >
                         {typeCounts[filter.value]}
                       </span>
                     </button>
@@ -1043,13 +1185,43 @@ export default function Transactions() {
                   {isMobile ? (
                     <div className="p-3 space-y-2">
                       {visibleRows.length === 0 && !anyQueryLoading ? (
-                        <div className="py-16 text-center text-sm text-gray-400" data-testid="empty-transactions">
-                          No transactions match your search or filters.
+                        <div
+                          className="py-12 text-center text-sm text-slate-400"
+                          data-testid="empty-transactions"
+                        >
+                          <div className="flex flex-col items-center justify-center gap-2">
+                            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 mb-1">
+                              <Search className="w-5 h-5" />
+                            </div>
+                            <span className="font-medium text-slate-600">
+                              No transactions match your search or filters.
+                            </span>
+                            {(search || typeFilter !== "all") && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 text-xs mt-1 rounded-lg"
+                                onClick={() => {
+                                  setSearch("");
+                                  setTypeFilter("all");
+                                  setPage(1);
+                                }}
+                              >
+                                Reset filters
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       ) : (
                         pageRows.map((row) =>
                           row.kind === "send_money" ? (
-                            <MobileSendMoneyCard key={row.tx.id} tx={row.tx} scheduled={row.scheduled} onCancel={handleCancelClick} onReceipt={setReceiptTx} />
+                            <MobileSendMoneyCard
+                              key={row.tx.id}
+                              tx={row.tx}
+                              scheduled={row.scheduled}
+                              onCancel={handleCancelClick}
+                              onReceipt={setReceiptTx}
+                            />
                           ) : (
                             <MobileUnifiedCard
                               key={row.row.key}
@@ -1066,31 +1238,83 @@ export default function Transactions() {
                           )
                         )
                       )}
+                      {anyQueryLoading && (
+                        <div className="py-2 space-y-2">
+                          <Skeleton className="h-20 w-full rounded-2xl" />
+                          <Skeleton className="h-20 w-full rounded-2xl" />
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <Table>
                       <TableHeader>
-                        <TableRow className="hover:bg-transparent bg-gray-50/50 border-b border-gray-100">
-                          <TableHead className="text-xs font-semibold text-gray-500 tracking-wider w-[100px] sm:w-[150px] py-4 pl-4 sm:pl-6">Ref no.</TableHead>
-                          <TableHead className="text-xs font-semibold text-gray-500 tracking-wider py-4">Recipient / sender</TableHead>
-                          <TableHead className="text-xs font-semibold text-gray-500 tracking-wider hidden md:table-cell py-4">Service</TableHead>
-                          <TableHead className="text-xs font-semibold text-gray-500 tracking-wider hidden sm:table-cell py-4">Date</TableHead>
-                          <TableHead className="text-xs font-semibold text-gray-500 tracking-wider text-right py-4 hidden sm:table-cell">Amount</TableHead>
-                          <TableHead className="text-xs font-semibold text-gray-500 tracking-wider text-center py-4">Status</TableHead>
-                          <TableHead className="text-xs font-semibold text-gray-500 tracking-wider text-center py-4 px-8 sm:px-10">Actions</TableHead>
+                        <TableRow className="hover:bg-transparent border-b border-slate-100">
+                          <TableHead className="text-xs font-bold text-[#323130] whitespace-nowrap py-3.5 pl-4 sm:pl-6">
+                            Order no
+                          </TableHead>
+                          <TableHead className="text-xs font-bold text-[#323130] hidden sm:table-cell py-3.5">
+                            Date
+                          </TableHead>
+                          <TableHead className="text-xs font-bold text-[#323130] py-3.5">
+                            Name
+                          </TableHead>
+                          <TableHead className="text-xs font-bold text-[#323130] hidden md:table-cell py-3.5">
+                            Service
+                          </TableHead>
+                          <TableHead className="text-xs font-bold text-[#323130] py-3.5 hidden sm:table-cell">
+                            Amount
+                          </TableHead>
+                          <TableHead className="text-xs font-bold text-[#323130] text-center py-3.5">
+                            Status
+                          </TableHead>
+                          <TableHead className="text-xs font-bold text-[#323130] text-center py-3.5 px-8 sm:px-10">
+                            Actions
+                          </TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {visibleRows.length === 0 && !anyQueryLoading ? (
                           <TableRow>
-                            <TableCell colSpan={7} className="py-16 text-center text-sm text-gray-400" data-testid="empty-transactions">
-                              No transactions match your search or filters.
+                            <TableCell
+                              colSpan={7}
+                              className="py-14 text-center text-sm text-slate-400"
+                              data-testid="empty-transactions"
+                            >
+                              <div className="flex flex-col items-center justify-center gap-2">
+                                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 mb-1">
+                                  <Search className="w-5 h-5" />
+                                </div>
+                                <span className="font-medium text-slate-600">
+                                  No transactions match your search or filters.
+                                </span>
+                                {(search || typeFilter !== "all") && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 text-xs mt-1 rounded-lg"
+                                    onClick={() => {
+                                      setSearch("");
+                                      setTypeFilter("all");
+                                      setPage(1);
+                                    }}
+                                  >
+                                    Reset filters
+                                  </Button>
+                                )}
+                              </div>
                             </TableCell>
                           </TableRow>
                         ) : (
                           pageRows.map((row) =>
                             row.kind === "send_money" ? (
-                              <SendMoneyRow key={row.tx.id} tx={row.tx} scheduled={row.scheduled} onCancel={handleCancelClick} onReceipt={setReceiptTx} />
+                              <SendMoneyRow
+                                key={row.tx.id}
+                                tx={row.tx}
+                                dateSort={row.dateSort}
+                                scheduled={row.scheduled}
+                                onCancel={handleCancelClick}
+                                onReceipt={setReceiptTx}
+                              />
                             ) : (
                               <UnifiedRow
                                 key={row.row.key}
@@ -1107,6 +1331,13 @@ export default function Transactions() {
                             )
                           )
                         )}
+                        {anyQueryLoading && (
+                          <TableRow>
+                            <TableCell colSpan={7} className="py-4">
+                              <Skeleton className="h-9 w-full rounded-lg" />
+                            </TableCell>
+                          </TableRow>
+                        )}
                       </TableBody>
                     </Table>
                   )}
@@ -1114,43 +1345,64 @@ export default function Transactions() {
 
                 {/* Pagination footer */}
                 {visibleRows.length > 0 && (
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 md:px-6 py-4 border-t border-gray-100 bg-white text-xs text-gray-500">
-                    <div>
-                      Showing {(safePage - 1) * TRANSACTIONS_PAGE_SIZE + 1} to {Math.min(safePage * TRANSACTIONS_PAGE_SIZE, visibleRows.length)} of {visibleRows.length} transactions
+                  <div
+                    className="flex flex-col sm:flex-row items-center justify-between gap-2 px-5 md:px-6 py-3.5 border-t border-slate-100 bg-slate-50/30"
+                    data-testid="transactions-pagination"
+                  >
+                    <p className="text-xs text-slate-500 font-medium">
+                      Showing{" "}
+                      {Math.min(
+                        visibleRows.length,
+                        (safePage - 1) * TRANSACTIONS_PAGE_SIZE + 1
+                      )}
+                      –
+                      {Math.min(
+                        safePage * TRANSACTIONS_PAGE_SIZE,
+                        visibleRows.length
+                      )}{" "}
+                      of {visibleRows.length} transactions • Page {safePage} of{" "}
+                      {totalPages}
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={safePage <= 1}
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        className="h-8 px-3 text-xs rounded-full border-slate-200 hover:bg-white active:scale-95"
+                        data-testid="button-prev-page"
+                      >
+                        <ChevronLeft className="w-4 h-4 mr-1" />
+                        Previous
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={safePage >= totalPages}
+                        onClick={() =>
+                          setPage((p) => Math.min(totalPages, p + 1))
+                        }
+                        className="h-8 px-3 text-xs rounded-full border-slate-200 hover:bg-white active:scale-95"
+                        data-testid="button-next-page"
+                      >
+                        Next
+                        <ChevronRight className="w-4 h-4 ml-1" />
+                      </Button>
                     </div>
-                    {totalPages > 1 && (
-                      <div className="flex items-center gap-1.5">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={safePage <= 1}
-                          onClick={() => setPage((p) => Math.max(1, p - 1))}
-                          className="h-8 px-2.5 text-xs rounded-lg"
-                        >
-                          <ChevronLeft className="w-3.5 h-3.5 mr-1" />
-                          Previous
-                        </Button>
-                        <span className="px-2 font-medium text-gray-700">
-                          {safePage} / {totalPages}
-                        </span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={safePage >= totalPages}
-                          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                          className="h-8 px-2.5 text-xs rounded-lg"
-                        >
-                          Next
-                          <ChevronRight className="w-3.5 h-3.5 ml-1" />
-                        </Button>
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
             </CardContent>
           </Card>
         </motion.div>
+
+        {/* Regulatory Footer Note matching Overview */}
+        <footer className="pt-2 pb-4 text-[11px] leading-relaxed text-slate-400">
+          Mito.money is a trademark owned by Funtech Global Communications Ltd.
+          Devonshire House, Manor way, Borehamwood, Herts. WD6 1QQ, United
+          Kingdom. A registered Payment institution in the UK with registration
+          details FRN: 815146 MLR NO: 12803115
+        </footer>
       </div>
     </DashboardLayout>
   );

@@ -14,9 +14,12 @@ test.describe('Send money receipt', () => {
         await page.route('**/api/send-money/transactions', (route) => route.request().method() === 'GET'
             ? route.fulfill({ json: { data: [paid, unpaid] } }) : route.continue());
         await page.goto('/transactions?type=send_money');
-        await expect(page.getByTestId('button-receipt-RH-RCPT1')).toBeVisible();
+        await expect(page.getByTestId('button-actions-more-RH-RCPT1')).toBeVisible();
+        await expect(page.getByTestId('button-actions-more-RH-RCPT2')).toHaveCount(0);
         await expect(page.getByTestId('button-receipt-RH-RCPT2')).toHaveCount(0);
 
+        await page.getByTestId('button-actions-more-RH-RCPT1').click();
+        await expect(page.getByTestId('button-receipt-RH-RCPT1')).toBeVisible();
         await page.getByTestId('button-receipt-RH-RCPT1').click();
         const receipt = page.getByTestId('send-money-receipt');
         await expect(receipt).toBeVisible();
